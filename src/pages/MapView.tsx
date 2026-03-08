@@ -108,12 +108,11 @@ const MapView = () => {
           setPermissionState("granted");
           const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, updated_at: new Date().toISOString() };
           setMyLocation(loc);
-          const { data: existing } = await supabase.from("locations").select("id").eq("user_id", user.id).single();
-          if (existing) {
-            await supabase.from("locations").update({ latitude: loc.latitude, longitude: loc.longitude }).eq("user_id", user.id);
-          } else {
-            await supabase.from("locations").insert({ user_id: user.id, latitude: loc.latitude, longitude: loc.longitude });
-          }
+          // Use upsert to avoid duplicate key errors
+          await supabase.from("locations").upsert(
+            { user_id: user.id, latitude: loc.latitude, longitude: loc.longitude },
+            { onConflict: "user_id" }
+          );
         },
         (err) => {
           if (err.code === 1) { setPermissionState("denied"); setLocationError("Location access denied."); }
@@ -129,7 +128,7 @@ const MapView = () => {
   // Fetch partner location
   useEffect(() => {
     if (!partnerId) return;
-    supabase.from("locations").select("*").eq("user_id", partnerId).single()
+    supabase.from("locations").select("*").eq("user_id", partnerId).maybeSingle()
       .then(({ data }) => { if (data) setPartnerLocation(data); });
 
     const channel = supabase.channel("partner-location")
