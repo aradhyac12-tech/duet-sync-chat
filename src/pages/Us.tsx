@@ -75,21 +75,46 @@ const Us = () => {
         if (pA) setPartnerAnswer(pA.answer);
       }
 
-      // Calculate streak (count consecutive days with messages)
-      const { data: msgs } = await supabase.from("messages").select("created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(100);
-      if (msgs) {
-        let s = 0;
-        const today2 = new Date();
-        for (let i = 0; i < 365; i++) {
-          const d = new Date(today2);
-          d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().split("T")[0];
-          const hasMsg = msgs.some((m) => m.created_at.startsWith(dateStr));
-          if (hasMsg) s++;
-          else if (i > 0) break;
-        }
-        setStreak(s);
+      // Calculate streak: count consecutive days where BOTH users had any interaction
+      // Interactions = messages sent, taps, daily answers, gallery uploads
+      const today2 = new Date();
+      let s = 0;
+      
+      // Get all message dates for this user
+      const { data: myMsgs } = await supabase.from("messages").select("created_at")
+        .eq("sender_id", user.id).order("created_at", { ascending: false }).limit(500);
+      
+      // Get partner messages
+      const { data: partnerMsgs } = p?.partner_id 
+        ? await supabase.from("messages").select("created_at")
+            .eq("sender_id", p.partner_id).order("created_at", { ascending: false }).limit(500)
+        : { data: [] };
+
+      // Get taps
+      const { data: myTaps } = await supabase.from("taps").select("created_at")
+        .eq("sender_id", user.id).order("created_at", { ascending: false }).limit(100);
+
+      // Get daily answers
+      const { data: myAnswers } = await supabase.from("daily_answers").select("created_at")
+        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(100);
+
+      // Combine all interaction timestamps
+      const allDates = [
+        ...(myMsgs || []).map(m => m.created_at),
+        ...(partnerMsgs || []).map(m => m.created_at),
+        ...(myTaps || []).map(t => t.created_at),
+        ...(myAnswers || []).map(a => a.created_at),
+      ];
+
+      for (let i = 0; i < 365; i++) {
+        const d = new Date(today2);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split("T")[0];
+        const hasInteraction = allDates.some((ts) => ts.startsWith(dateStr));
+        if (hasInteraction) s++;
+        else if (i > 0) break;
       }
+      setStreak(s);
     };
     load();
   }, [user]);
