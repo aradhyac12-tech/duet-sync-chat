@@ -12,6 +12,27 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    SplashScreen: {
+      launchAutoHide: true,
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false,
+      backgroundColor: '#F5F0EB',
+    },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+  },
+  ios: {
+    contentInset: 'automatic',
+    preferredContentMode: 'mobile',
+    scheme: 'DuoSpace',
+  },
+  android: {
+    backgroundColor: '#F5F0EB',
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: false,
   },
 };
 
