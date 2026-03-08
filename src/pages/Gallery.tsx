@@ -1,11 +1,12 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, ImageIcon, Lock, Unlock, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Plus, ImageIcon, Lock, Unlock, Eye, EyeOff, Trash2, Camera } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import CameraWithFilters from "@/components/CameraWithFilters";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -32,9 +33,9 @@ const Gallery = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [viewImage, setViewImage] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Load profile, partner, gallery shared state
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -47,20 +48,16 @@ const Gallery = () => {
     load();
   }, [user]);
 
-  // Fetch gallery items
   useEffect(() => {
     if (!user) return;
     const fetchItems = async () => {
-      // My items
       const { data: mine } = await supabase.from("gallery_items").select("*").eq("owner_id", user.id).order("created_at", { ascending: false });
       if (mine) setMyItems(mine);
 
-      // Shared items (mine that are shared + partner's that are shared)
       if (partnerId) {
         const { data: partner } = await supabase.from("gallery_items").select("*").eq("owner_id", partnerId).order("created_at", { ascending: false });
         if (partner) setPartnerItems(partner);
 
-        // Shared = both users' shared items
         const allShared = [
           ...(mine?.filter((i) => i.is_shared) || []),
           ...(partner?.filter((i) => i.is_shared) || []),
@@ -75,30 +72,38 @@ const Gallery = () => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     setUploading(true);
+    await saveToGallery(file);
+    setUploading(false);
+    e.target.value = "";
+  };
 
-    const path = `${user.id}/${Date.now()}_${file.name}`;
+  const saveToGallery = async (file: File | Blob, fileName?: string) => {
+    if (!user) return;
+    const name = fileName || `${Date.now()}.jpg`;
+    const path = `${user.id}/${Date.now()}_${name}`;
     const { data: uploadData } = await supabase.storage.from("gallery").upload(path, file);
     if (!uploadData) {
       toast({ title: "Upload failed", variant: "destructive" });
-      setUploading(false);
       return;
     }
-
     const { data: urlData } = supabase.storage.from("gallery").getPublicUrl(path);
-
     const { data: item } = await supabase.from("gallery_items").insert({
       owner_id: user.id,
       file_url: urlData.publicUrl,
-      file_type: file.type.startsWith("video") ? "video" : "image",
+      file_type: "image",
       is_shared: false,
     }).select().single();
-
     if (item) {
       setMyItems((prev) => [item, ...prev]);
       toast({ title: "Photo added! 📸" });
     }
+  };
+
+  const handleCameraCapture = async (blob: Blob, filterName: string) => {
+    setShowCamera(false);
+    setUploading(true);
+    await saveToGallery(blob, `camera_${filterName}_${Date.now()}.jpg`);
     setUploading(false);
-    e.target.value = "";
   };
 
   const toggleShare = async (itemId: string, currentlyShared: boolean) => {
@@ -133,31 +138,19 @@ const Gallery = () => {
         </div>
       ) : (
         items.map((item, i) => (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
+          <motion.div key={item.id}
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.03 }}
-            className="aspect-square rounded-xl overflow-hidden relative group"
-          >
-            <img
-              src={item.file_url}
-              alt=""
-              className="w-full h-full object-cover cursor-pointer"
-              onClick={() => setViewImage(item.file_url)}
-            />
+            className="aspect-square rounded-xl overflow-hidden relative group">
+            <img src={item.file_url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => setViewImage(item.file_url)} />
             {showActions && (
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => toggleShare(item.id, item.is_shared)}
-                  className="h-7 w-7 rounded-full bg-black/50 flex items-center justify-center"
-                >
+                <button onClick={() => toggleShare(item.id, item.is_shared)}
+                  className="h-7 w-7 rounded-full bg-black/50 flex items-center justify-center">
                   {item.is_shared ? <Eye className="h-3.5 w-3.5 text-white" /> : <EyeOff className="h-3.5 w-3.5 text-white" />}
                 </button>
-                <button
-                  onClick={() => setShowDeleteDialog(item.id)}
-                  className="h-7 w-7 rounded-full bg-black/50 flex items-center justify-center"
-                >
+                <button onClick={() => setShowDeleteDialog(item.id)}
+                  className="h-7 w-7 rounded-full bg-black/50 flex items-center justify-center">
                   <Trash2 className="h-3.5 w-3.5 text-white" />
                 </button>
               </div>
@@ -179,18 +172,17 @@ const Gallery = () => {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
       <PageHeader title="Gallery" subtitle="Our moments">
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowShareDialog(true)}
-            className="h-9 px-3 rounded-xl bg-accent flex items-center gap-1.5 text-xs font-medium"
-          >
+          <button onClick={() => setShowShareDialog(true)}
+            className="h-9 px-3 rounded-xl bg-accent flex items-center gap-1.5 text-xs font-medium">
             {myGalleryShared ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             {myGalleryShared ? "Shared" : "Private"}
           </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center"
-          >
+          <button onClick={() => setShowCamera(true)}
+            className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center">
+            <Camera className="h-4 w-4 text-background" />
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">
             <Plus className="h-5 w-5 text-foreground" />
           </button>
         </div>
@@ -203,56 +195,42 @@ const Gallery = () => {
           <TabsTrigger value="theirs" className="flex-1 rounded-lg text-xs">Theirs</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="shared" className="mt-4">
-          <GalleryGrid items={sharedItems} />
-        </TabsContent>
-
+        <TabsContent value="shared" className="mt-4"><GalleryGrid items={sharedItems} /></TabsContent>
         <TabsContent value="mine" className="mt-4">
           <div className="flex items-center justify-between mb-3 px-1">
             <p className="text-xs text-muted-foreground">
               {myGalleryShared ? "Your partner can see these photos" : "Only you can see these photos"}
             </p>
             <button onClick={() => setShowShareDialog(true)}>
-              {myGalleryShared ? (
-                <Unlock className="h-4 w-4 text-primary" />
-              ) : (
-                <Lock className="h-4 w-4 text-muted-foreground" />
-              )}
+              {myGalleryShared ? <Unlock className="h-4 w-4 text-primary" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
             </button>
           </div>
           <GalleryGrid items={myItems} showActions />
         </TabsContent>
-
         <TabsContent value="theirs" className="mt-4">
           {!partnerId ? (
             <div className="py-12 text-center">
               <Lock className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">Link with a partner first</p>
             </div>
-          ) : (
-            <GalleryGrid items={partnerItems} />
-          )}
+          ) : <GalleryGrid items={partnerItems} />}
         </TabsContent>
       </Tabs>
 
-      {/* Image viewer */}
       {viewImage && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewImage(null)}>
           <img src={viewImage} alt="" className="max-w-full max-h-full object-contain" />
         </div>
       )}
 
-      {/* Share consent dialog */}
+      {showCamera && <CameraWithFilters onClose={() => setShowCamera(false)} onCapture={handleCameraCapture} />}
+
       <AlertDialog open={showShareDialog} onOpenChange={setShowShareDialog}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {myGalleryShared ? "Make gallery private?" : "Share your gallery?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{myGalleryShared ? "Make gallery private?" : "Share your gallery?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {myGalleryShared
-                ? "Your partner will no longer be able to view your photos."
-                : "Your partner will be able to see all photos in your gallery. You can revoke access anytime."}
+              {myGalleryShared ? "Your partner will no longer be able to view your photos." : "Your partner will be able to see all photos in your gallery. You can revoke access anytime."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -264,7 +242,6 @@ const Gallery = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete dialog */}
       <AlertDialog open={!!showDeleteDialog} onOpenChange={() => setShowDeleteDialog(null)}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
