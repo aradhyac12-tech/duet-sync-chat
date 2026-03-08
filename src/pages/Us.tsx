@@ -180,7 +180,7 @@ const Us = () => {
               {partnerProfile?.mood_emoji || "😊"}
             </button>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{partnerProfile?.display_name || "Partner"}</p>
+              <p className="text-sm font-medium">{partnerProfile?.pet_name || partnerProfile?.display_name || "Partner"}</p>
               <p className="text-xs text-muted-foreground truncate">
                 {partnerProfile?.mood_text || "No mood set"} • {moodTime}
               </p>
