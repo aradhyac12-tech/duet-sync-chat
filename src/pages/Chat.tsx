@@ -340,8 +340,9 @@ const Chat = () => {
                   </a>
                 )}
                 {msg.message_type !== "voice" && msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
-                <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.sender_id === user?.id ? "text-right" : ""}`}>
+                <span className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5 ${msg.sender_id === user?.id ? "justify-end" : ""}`}>
                   {formatTime(msg.created_at)}
+                  <MessageStatus isRead={msg.is_read} isMine={msg.sender_id === user?.id} />
                 </span>
               </div>
             </motion.div>
