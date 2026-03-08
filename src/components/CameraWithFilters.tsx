@@ -1,33 +1,75 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, RotateCcw, Send, Download, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { motion } from "framer-motion";
+import { X, RotateCcw, Send, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface FilterDef {
   name: string;
   emoji: string;
   css: string;
+  category: string;
 }
 
 const FILTERS: FilterDef[] = [
-  { name: "Normal", emoji: "📷", css: "none" },
-  { name: "Warm", emoji: "🌅", css: "sepia(0.3) saturate(1.4) brightness(1.1)" },
-  { name: "Cool", emoji: "❄️", css: "saturate(0.8) brightness(1.1) hue-rotate(20deg)" },
-  { name: "Vintage", emoji: "📻", css: "sepia(0.5) contrast(1.1) brightness(0.9)" },
-  { name: "B&W", emoji: "🖤", css: "grayscale(1) contrast(1.2)" },
-  { name: "Pop", emoji: "🎨", css: "saturate(1.8) contrast(1.2) brightness(1.05)" },
-  { name: "Dreamy", emoji: "💫", css: "brightness(1.15) contrast(0.9) saturate(1.3) blur(0.5px)" },
-  { name: "Sunset", emoji: "🌇", css: "sepia(0.2) saturate(1.5) hue-rotate(-15deg) brightness(1.1)" },
-  { name: "Noir", emoji: "🕶️", css: "grayscale(0.8) contrast(1.4) brightness(0.85)" },
-  { name: "Glow", emoji: "✨", css: "brightness(1.2) saturate(1.3) contrast(0.95)" },
-  { name: "Fade", emoji: "🌫️", css: "contrast(0.85) brightness(1.1) saturate(0.7)" },
-  { name: "Lomo", emoji: "🎞️", css: "saturate(1.5) contrast(1.3) brightness(0.9) sepia(0.1)" },
-  { name: "Berry", emoji: "🫐", css: "hue-rotate(330deg) saturate(1.4) brightness(1.05)" },
-  { name: "Fresh", emoji: "🌿", css: "hue-rotate(60deg) saturate(1.2) brightness(1.1)" },
-  { name: "Golden", emoji: "🌟", css: "sepia(0.35) saturate(1.3) brightness(1.15) hue-rotate(-10deg)" },
-  { name: "Cinema", emoji: "🎬", css: "contrast(1.2) saturate(0.9) brightness(0.95) sepia(0.15)" },
+  // Basic
+  { name: "Normal", emoji: "📷", css: "none", category: "Basic" },
+  { name: "B&W", emoji: "🖤", css: "grayscale(1) contrast(1.2)", category: "Basic" },
+  { name: "Sepia", emoji: "📜", css: "sepia(0.8) contrast(1.1)", category: "Basic" },
+  
+  // Warm
+  { name: "Warm", emoji: "🌅", css: "sepia(0.3) saturate(1.4) brightness(1.1)", category: "Warm" },
+  { name: "Sunset", emoji: "🌇", css: "sepia(0.2) saturate(1.5) hue-rotate(-15deg) brightness(1.1)", category: "Warm" },
+  { name: "Golden", emoji: "🌟", css: "sepia(0.35) saturate(1.3) brightness(1.15) hue-rotate(-10deg)", category: "Warm" },
+  { name: "Honey", emoji: "🍯", css: "sepia(0.4) saturate(1.6) brightness(1.1) hue-rotate(-5deg)", category: "Warm" },
+  { name: "Amber", emoji: "🔶", css: "sepia(0.5) saturate(1.2) brightness(1.05) hue-rotate(-20deg)", category: "Warm" },
+  { name: "Peach", emoji: "🍑", css: "sepia(0.15) saturate(1.3) brightness(1.15) hue-rotate(-8deg)", category: "Warm" },
+
+  // Cool
+  { name: "Cool", emoji: "❄️", css: "saturate(0.8) brightness(1.1) hue-rotate(20deg)", category: "Cool" },
+  { name: "Arctic", emoji: "🧊", css: "saturate(0.6) brightness(1.15) hue-rotate(30deg) contrast(1.05)", category: "Cool" },
+  { name: "Ocean", emoji: "🌊", css: "saturate(1.2) brightness(1.05) hue-rotate(15deg)", category: "Cool" },
+  { name: "Frozen", emoji: "🥶", css: "saturate(0.5) brightness(1.2) hue-rotate(40deg) contrast(1.1)", category: "Cool" },
+  { name: "Aqua", emoji: "💎", css: "saturate(1.1) brightness(1.1) hue-rotate(25deg) contrast(0.95)", category: "Cool" },
+
+  // Vintage
+  { name: "Vintage", emoji: "📻", css: "sepia(0.5) contrast(1.1) brightness(0.9)", category: "Vintage" },
+  { name: "Lomo", emoji: "🎞️", css: "saturate(1.5) contrast(1.3) brightness(0.9) sepia(0.1)", category: "Vintage" },
+  { name: "Retro", emoji: "📺", css: "sepia(0.3) contrast(1.15) saturate(1.1) brightness(0.95)", category: "Vintage" },
+  { name: "Film", emoji: "🎥", css: "contrast(1.1) saturate(0.85) brightness(1.05) sepia(0.2)", category: "Vintage" },
+  { name: "Kodak", emoji: "📸", css: "sepia(0.15) saturate(1.4) contrast(1.05) brightness(1.08)", category: "Vintage" },
+  { name: "Polaroid", emoji: "🖼️", css: "sepia(0.25) contrast(0.95) saturate(1.2) brightness(1.12)", category: "Vintage" },
+
+  // Vibrant
+  { name: "Pop", emoji: "🎨", css: "saturate(1.8) contrast(1.2) brightness(1.05)", category: "Vibrant" },
+  { name: "Neon", emoji: "💜", css: "saturate(2.2) contrast(1.1) brightness(1.15)", category: "Vibrant" },
+  { name: "Vivid", emoji: "🌈", css: "saturate(2.0) contrast(1.15) brightness(1.08)", category: "Vibrant" },
+  { name: "Electric", emoji: "⚡", css: "saturate(1.9) contrast(1.25) brightness(1.1) hue-rotate(5deg)", category: "Vibrant" },
+  { name: "Candy", emoji: "🍬", css: "saturate(1.7) contrast(1.05) brightness(1.15) hue-rotate(-10deg)", category: "Vibrant" },
+
+  // Mood
+  { name: "Dreamy", emoji: "💫", css: "brightness(1.15) contrast(0.9) saturate(1.3) blur(0.5px)", category: "Mood" },
+  { name: "Fade", emoji: "🌫️", css: "contrast(0.85) brightness(1.1) saturate(0.7)", category: "Mood" },
+  { name: "Moody", emoji: "🌑", css: "contrast(1.3) brightness(0.85) saturate(0.8)", category: "Mood" },
+  { name: "Glow", emoji: "✨", css: "brightness(1.2) saturate(1.3) contrast(0.95)", category: "Mood" },
+  { name: "Haze", emoji: "🫧", css: "brightness(1.18) contrast(0.8) saturate(0.9) blur(0.3px)", category: "Mood" },
+  { name: "Mist", emoji: "🌬️", css: "brightness(1.1) contrast(0.88) saturate(0.75)", category: "Mood" },
+
+  // Dark
+  { name: "Noir", emoji: "🕶️", css: "grayscale(0.8) contrast(1.4) brightness(0.85)", category: "Dark" },
+  { name: "Cinema", emoji: "🎬", css: "contrast(1.2) saturate(0.9) brightness(0.95) sepia(0.15)", category: "Dark" },
+  { name: "Shadow", emoji: "🌑", css: "contrast(1.35) brightness(0.8) saturate(0.7)", category: "Dark" },
+  { name: "Gothic", emoji: "🦇", css: "grayscale(0.5) contrast(1.5) brightness(0.78)", category: "Dark" },
+  { name: "Dark", emoji: "🕳️", css: "contrast(1.4) brightness(0.75) saturate(0.6) sepia(0.05)", category: "Dark" },
+
+  // Color shift
+  { name: "Berry", emoji: "🫐", css: "hue-rotate(330deg) saturate(1.4) brightness(1.05)", category: "Color" },
+  { name: "Fresh", emoji: "🌿", css: "hue-rotate(60deg) saturate(1.2) brightness(1.1)", category: "Color" },
+  { name: "Rose", emoji: "🌹", css: "hue-rotate(340deg) saturate(1.3) brightness(1.08)", category: "Color" },
+  { name: "Lime", emoji: "🍋", css: "hue-rotate(80deg) saturate(1.4) brightness(1.12)", category: "Color" },
+  { name: "Violet", emoji: "🪻", css: "hue-rotate(270deg) saturate(1.3) brightness(1.05)", category: "Color" },
+  { name: "Coral", emoji: "🪸", css: "hue-rotate(350deg) saturate(1.5) brightness(1.1)", category: "Color" },
+  { name: "Teal", emoji: "🦚", css: "hue-rotate(160deg) saturate(1.2) brightness(1.08)", category: "Color" },
+  { name: "Plum", emoji: "🍇", css: "hue-rotate(290deg) saturate(1.4) brightness(0.95)", category: "Color" },
 ];
 
 interface CameraWithFiltersProps {
@@ -43,7 +85,11 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("Basic");
   const { toast } = useToast();
+
+  const categories = [...new Set(FILTERS.map((f) => f.category))];
+  const categoryFilters = FILTERS.filter((f) => f.category === selectedCategory);
 
   const startCamera = useCallback(async (facing: "user" | "environment") => {
     try {
@@ -54,10 +100,8 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
       });
       setStream(s);
       setCameraError(null);
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-      }
-    } catch (err) {
+      if (videoRef.current) videoRef.current.srcObject = s;
+    } catch {
       setCameraError("Camera access denied. Please allow camera permission.");
       toast({ title: "Camera access needed", description: "Allow camera permission in your browser settings.", variant: "destructive" });
     }
@@ -81,8 +125,6 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d")!;
-
-    // Apply filter
     ctx.filter = FILTERS[selectedFilter].css;
     if (facingMode === "user") {
       ctx.translate(canvas.width, 0);
@@ -90,7 +132,6 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
     }
     ctx.drawImage(video, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-
     setCapturedImage(canvas.toDataURL("image/jpeg", 0.92));
   };
 
@@ -107,7 +148,7 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
         <div className="text-center space-y-4 px-8">
-          <Camera className="h-12 w-12 text-white/40 mx-auto" />
+          <Sparkles className="h-12 w-12 text-white/40 mx-auto" />
           <p className="text-white text-sm">{cameraError}</p>
           <button onClick={onClose} className="bg-white/20 text-white px-6 py-2.5 rounded-xl text-sm">Close</button>
         </div>
@@ -148,24 +189,40 @@ const CameraWithFilters = ({ onClose, onCapture }: CameraWithFiltersProps) => {
       <div className="bg-black/80 backdrop-blur-md safe-bottom">
         {!capturedImage ? (
           <>
-            {/* Filter strip */}
-            <div className="flex overflow-x-auto gap-3 px-4 py-3 no-scrollbar">
-              {FILTERS.map((f, i) => (
-                <button key={f.name} onClick={() => setSelectedFilter(i)}
-                  className={`flex flex-col items-center gap-1 shrink-0 ${selectedFilter === i ? "opacity-100" : "opacity-50"}`}>
-                  <div className={`h-12 w-12 rounded-full bg-white/10 flex items-center justify-center text-lg ${selectedFilter === i ? "ring-2 ring-white" : ""}`}>
-                    {f.emoji}
-                  </div>
-                  <span className="text-[9px] text-white">{f.name}</span>
+            {/* Category tabs */}
+            <div className="flex overflow-x-auto gap-1 px-3 pt-2 no-scrollbar">
+              {categories.map((cat) => (
+                <button key={cat} onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors ${
+                    selectedCategory === cat ? "bg-white text-black" : "bg-white/10 text-white/70"
+                  }`}>
+                  {cat}
                 </button>
               ))}
             </div>
 
+            {/* Filter strip */}
+            <div className="flex overflow-x-auto gap-2.5 px-4 py-2.5 no-scrollbar">
+              {categoryFilters.map((f) => {
+                const globalIdx = FILTERS.indexOf(f);
+                return (
+                  <button key={f.name} onClick={() => setSelectedFilter(globalIdx)}
+                    className={`flex flex-col items-center gap-0.5 shrink-0 transition-opacity ${selectedFilter === globalIdx ? "opacity-100" : "opacity-50"}`}>
+                    <div className={`h-11 w-11 rounded-full bg-white/10 flex items-center justify-center text-base ${selectedFilter === globalIdx ? "ring-2 ring-white" : ""}`}>
+                      {f.emoji}
+                    </div>
+                    <span className="text-[8px] text-white">{f.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Capture button */}
-            <div className="flex items-center justify-center py-4">
+            <div className="flex items-center justify-center py-3">
               <button onClick={capture}
-                className="h-20 w-20 rounded-full border-4 border-white flex items-center justify-center active:scale-95 transition-transform">
-                <div className="h-16 w-16 rounded-full bg-white" />
+                className="h-18 w-18 rounded-full border-4 border-white flex items-center justify-center active:scale-95 transition-transform"
+                style={{ width: 72, height: 72 }}>
+                <div className="rounded-full bg-white" style={{ width: 60, height: 60 }} />
               </button>
             </div>
           </>

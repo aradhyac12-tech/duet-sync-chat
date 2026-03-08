@@ -1,7 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { MessageCircle, Image, Phone, MapPin, Heart, Settings } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useMotionValueEvent, useScroll } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useState, useEffect, useRef } from "react";
 
 const tabs = [
   { path: "/chat", icon: MessageCircle, label: "Chat" },
@@ -11,15 +12,64 @@ const tabs = [
   { path: "/us", icon: Heart, label: "Us" },
 ];
 
+// Pages where nav should always be hidden
+const HIDDEN_PAGES = ["/settings"];
+
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
-  // Hide nav on settings page
-  if (location.pathname === "/settings") return null;
+  // Hide on specific pages
+  if (HIDDEN_PAGES.includes(location.pathname)) return null;
+
+  // Scroll-based auto-hide: listen on window scroll
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY;
+          const delta = currentY - lastScrollY.current;
+
+          // Scrolling down more than 8px → hide
+          if (delta > 8 && currentY > 60) {
+            setIsVisible(false);
+          }
+          // Scrolling up more than 8px → show
+          else if (delta < -8) {
+            setIsVisible(true);
+          }
+          // At top of page → always show
+          if (currentY < 20) {
+            setIsVisible(true);
+          }
+
+          lastScrollY.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Reset visibility on page change
+  useEffect(() => {
+    setIsVisible(true);
+    lastScrollY.current = 0;
+  }, [location.pathname]);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-t border-border safe-bottom">
+    <motion.nav
+      initial={{ y: 0 }}
+      animate={{ y: isVisible ? 0 : 100 }}
+      transition={{ type: "spring", stiffness: 400, damping: 35 }}
+      className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-t border-border safe-bottom"
+    >
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
@@ -45,7 +95,6 @@ const BottomNav = () => {
             </button>
           );
         })}
-        {/* Settings icon */}
         <button
           onClick={() => navigate("/settings")}
           className="relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-2xl text-muted-foreground transition-colors"
@@ -54,7 +103,7 @@ const BottomNav = () => {
           <span className="text-[10px] font-medium tracking-wide">More</span>
         </button>
       </div>
-    </nav>
+    </motion.nav>
   );
 };
 
