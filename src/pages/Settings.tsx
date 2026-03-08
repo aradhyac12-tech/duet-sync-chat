@@ -43,15 +43,31 @@ const Settings = () => {
   const [partnerEmail, setPartnerEmail] = useState("");
   const [currentPartner, setCurrentPartner] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
+  const [petName, setPetName] = useState("");
+  const [editingPetName, setEditingPetName] = useState(false);
+  const [myProfile, setMyProfile] = useState<any>(null);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data } = await supabase.from("profiles").select("partner_id").eq("user_id", user.id).single();
+      const { data } = await supabase.from("profiles").select("partner_id, display_name, gender, phone_number, pet_name").eq("user_id", user.id).single();
+      if (data) {
+        setMyProfile(data);
+        if (data.partner_id) {
+          setCurrentPartner(data.partner_id);
+          const { data: pp } = await supabase.from("profiles").select("display_name, pet_name").eq("user_id", data.partner_id).single();
+          if (pp) {
+            setPartnerName(pp.display_name);
+            // pet_name on partner's profile = what they call us. We want to edit the pet_name on OUR partner's row
+          }
+        }
+      }
+      // Get pet name we've given our partner (stored on partner's profile)
       if (data?.partner_id) {
-        setCurrentPartner(data.partner_id);
-        const { data: pp } = await supabase.from("profiles").select("display_name").eq("user_id", data.partner_id).single();
-        if (pp) setPartnerName(pp.display_name);
+        const { data: pp } = await supabase.from("profiles").select("pet_name").eq("user_id", data.partner_id).single();
+        // Actually, pet_name should be stored on OUR profile as what our PARTNER calls us
+        // Let's store it differently: pet_name on a profile = what their partner calls them
+        if (pp) setPetName(pp.pet_name || "");
       }
     };
     load();
