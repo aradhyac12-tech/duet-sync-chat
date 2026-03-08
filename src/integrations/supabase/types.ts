@@ -193,6 +193,7 @@ export type Database = {
           mood_text: string | null
           mood_updated_at: string | null
           partner_id: string | null
+          public_key: string | null
           updated_at: string
           user_id: string
         }
@@ -206,6 +207,7 @@ export type Database = {
           mood_text?: string | null
           mood_updated_at?: string | null
           partner_id?: string | null
+          public_key?: string | null
           updated_at?: string
           user_id: string
         }
@@ -219,6 +221,7 @@ export type Database = {
           mood_text?: string | null
           mood_updated_at?: string | null
           partner_id?: string | null
+          public_key?: string | null
           updated_at?: string
           user_id?: string
         }

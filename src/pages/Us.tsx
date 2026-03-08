@@ -1,6 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Smile, Timer, Zap, Star, HelpCircle, Flame, Plus, X, Send, Settings } from "lucide-react";
+import { Smile, Timer, Zap, HelpCircle, Flame, Plus, X, Send, Settings } from "lucide-react";
+import MemoryWall from "@/components/MemoryWall";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
@@ -243,14 +244,7 @@ const Us = () => {
           </div>
         </section>
 
-        {/* Memory wall placeholder */}
-        <section>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Memory Wall</h2>
-          <div className="bg-card rounded-2xl border border-border p-6 text-center shadow-sm">
-            <Star className="h-8 w-8 text-taupe/40 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Pin your favorite moments here</p>
-          </div>
-        </section>
+        <MemoryWall />
       </div>
 
       {/* Mood dialog */}
