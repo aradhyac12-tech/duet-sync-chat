@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import { motion } from "framer-motion";
-import { MapPin, Navigation, AlertCircle } from "lucide-react";
+import { MapPin, Navigation, AlertCircle, Layers } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,6 +21,23 @@ interface LocationData {
   updated_at: string;
 }
 
+type MapStyle = "street" | "satellite" | "voyager";
+
+const MAP_TILES: Record<MapStyle, { url: string; name: string }> = {
+  street: {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    name: "Street",
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    name: "Satellite",
+  },
+  voyager: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    name: "Voyager",
+  },
+};
+
 const MapView = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -32,12 +49,15 @@ const MapView = () => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [permissionState, setPermissionState] = useState<"prompt" | "granted" | "denied" | "unknown">("unknown");
+  const [mapStyle, setMapStyle] = useState<MapStyle>("street");
+  const [initialZoomDone, setInitialZoomDone] = useState(false);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const lineRef = useRef<any>(null);
 
-  // Get partner ID & name
+  // Get partner
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("partner_id").eq("user_id", user.id).single()
@@ -50,14 +70,12 @@ const MapView = () => {
       });
   }, [user]);
 
-  // Check & request location permission
+  // Request permission
   const requestLocation = useCallback(async () => {
     if (!("geolocation" in navigator)) {
-      setLocationError("Geolocation is not supported by your browser");
+      setLocationError("Geolocation is not supported");
       return;
     }
-
-    // Check permission state if API available
     if ("permissions" in navigator) {
       try {
         const result = await navigator.permissions.query({ name: "geolocation" });
@@ -65,34 +83,31 @@ const MapView = () => {
         result.onchange = () => setPermissionState(result.state as any);
       } catch {}
     }
-
     navigator.geolocation.getCurrentPosition(
-      () => setPermissionState("granted"),
+      () => { setPermissionState("granted"); setLocationError(null); },
       (err) => {
         if (err.code === 1) {
           setPermissionState("denied");
           setLocationError("Location permission denied. Please enable it in your browser settings.");
         } else {
-          setLocationError("Unable to get your location. Please try again.");
+          setLocationError("Unable to get location. Please try again.");
         }
       },
       { enableHighAccuracy: true }
     );
   }, []);
 
-  // Watch my location and update DB
+  // Watch location
   useEffect(() => {
     if (!user) return;
     let watchId: number;
-
-    const startWatch = () => {
+    if ("geolocation" in navigator) {
       watchId = navigator.geolocation.watchPosition(
         async (pos) => {
           setLocationError(null);
           setPermissionState("granted");
           const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, updated_at: new Date().toISOString() };
           setMyLocation(loc);
-          // Upsert location
           const { data: existing } = await supabase.from("locations").select("id").eq("user_id", user.id).single();
           if (existing) {
             await supabase.from("locations").update({ latitude: loc.latitude, longitude: loc.longitude }).eq("user_id", user.id);
@@ -101,36 +116,21 @@ const MapView = () => {
           }
         },
         (err) => {
-          if (err.code === 1) {
-            setPermissionState("denied");
-            setLocationError("Location access denied. Enable in browser settings.");
-          } else if (err.code === 2) {
-            setLocationError("Location unavailable. Check your device settings.");
-          } else {
-            setLocationError("Location request timed out. Retrying...");
-          }
+          if (err.code === 1) { setPermissionState("denied"); setLocationError("Location access denied."); }
+          else if (err.code === 2) { setLocationError("Location unavailable."); }
+          else { setLocationError("Location timed out."); }
         },
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
       );
-    };
-
-    if ("geolocation" in navigator) {
-      startWatch();
-    } else {
-      setLocationError("Geolocation not supported");
     }
-
     return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
   }, [user]);
 
   // Fetch partner location
   useEffect(() => {
     if (!partnerId) return;
-    const fetchPartnerLoc = async () => {
-      const { data } = await supabase.from("locations").select("*").eq("user_id", partnerId).single();
-      if (data) setPartnerLocation(data);
-    };
-    fetchPartnerLoc();
+    supabase.from("locations").select("*").eq("user_id", partnerId).single()
+      .then(({ data }) => { if (data) setPartnerLocation(data); });
 
     const channel = supabase.channel("partner-location")
       .on("postgres_changes", { event: "*", schema: "public", table: "locations", filter: `user_id=eq.${partnerId}` },
@@ -139,31 +139,46 @@ const MapView = () => {
     return () => { supabase.removeChannel(channel); };
   }, [partnerId]);
 
-  // Calculate distance
+  // Distance
   useEffect(() => {
     if (myLocation && partnerLocation) {
       setDistance(haversineDistance(myLocation.latitude, myLocation.longitude, partnerLocation.latitude, partnerLocation.longitude));
     }
   }, [myLocation, partnerLocation]);
 
-  // Initialize Leaflet map
+  // Init map
   useEffect(() => {
     if (!mapRef.current || mapLoaded) return;
     import("leaflet").then((L) => {
-      const map = L.map(mapRef.current!, { zoomControl: false, attributionControl: false }).setView([20, 0], 3);
-      // Use a beautiful map style
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      const map = L.map(mapRef.current!, {
+        zoomControl: false,
+        attributionControl: false,
+        minZoom: 3,
         maxZoom: 19,
-      }).addTo(map);
-      // Add minimal attribution
-      L.control.attribution({ position: "bottomright", prefix: false }).addAttribution('© <a href="https://osm.org">OSM</a>').addTo(map);
+      }).setView([20, 0], 3);
+
+      tileLayerRef.current = L.tileLayer(MAP_TILES[mapStyle].url, { maxZoom: 19 }).addTo(map);
+      L.control.attribution({ position: "bottomright", prefix: false }).addAttribution('© OSM').addTo(map);
+
+      // Add zoom control bottom-right
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
       mapInstanceRef.current = map;
       setMapLoaded(true);
     });
     return () => { mapInstanceRef.current?.remove(); };
   }, []);
 
-  // Update markers & line
+  // Switch tiles
+  useEffect(() => {
+    if (!mapInstanceRef.current || !tileLayerRef.current) return;
+    import("leaflet").then((L) => {
+      tileLayerRef.current.remove();
+      tileLayerRef.current = L.tileLayer(MAP_TILES[mapStyle].url, { maxZoom: 19 }).addTo(mapInstanceRef.current);
+    });
+  }, [mapStyle]);
+
+  // Update markers
   useEffect(() => {
     if (!mapInstanceRef.current || !mapLoaded) return;
     import("leaflet").then((L) => {
@@ -194,20 +209,24 @@ const MapView = () => {
         markersRef.current.push(m);
       }
 
-      // Draw a dashed line between both
       if (myLocation && partnerLocation) {
         lineRef.current = L.polyline(
           [[myLocation.latitude, myLocation.longitude], [partnerLocation.latitude, partnerLocation.longitude]],
           { color: "hsl(350, 80%, 60%)", weight: 2, dashArray: "8, 8", opacity: 0.6 }
         ).addTo(mapInstanceRef.current);
 
-        const bounds = L.latLngBounds([
-          [myLocation.latitude, myLocation.longitude],
-          [partnerLocation.latitude, partnerLocation.longitude],
-        ]);
-        mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60] });
-      } else if (myLocation) {
-        mapInstanceRef.current.setView([myLocation.latitude, myLocation.longitude], 14);
+        // Only auto-fit on first load
+        if (!initialZoomDone) {
+          const bounds = L.latLngBounds([
+            [myLocation.latitude, myLocation.longitude],
+            [partnerLocation.latitude, partnerLocation.longitude],
+          ]);
+          mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+          setInitialZoomDone(true);
+        }
+      } else if (myLocation && !initialZoomDone) {
+        mapInstanceRef.current.setView([myLocation.latitude, myLocation.longitude], 16);
+        setInitialZoomDone(true);
       }
     });
   }, [myLocation, partnerLocation, mapLoaded, partnerName]);
@@ -227,6 +246,18 @@ const MapView = () => {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
+  const cycleMapStyle = () => {
+    const styles: MapStyle[] = ["street", "satellite", "voyager"];
+    const idx = styles.indexOf(mapStyle);
+    setMapStyle(styles[(idx + 1) % styles.length]);
+  };
+
+  const centerOnMe = () => {
+    if (myLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.setView([myLocation.latitude, myLocation.longitude], 16, { animate: true });
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen">
       <PageHeader title="Map" subtitle="Always close" />
@@ -234,7 +265,13 @@ const MapView = () => {
       <div className="flex-1 mx-5 mb-4 rounded-2xl border border-border overflow-hidden relative">
         <div ref={mapRef} className="absolute inset-0" />
 
-        {/* Location error or permission prompt */}
+        {/* Map style toggle */}
+        <button onClick={cycleMapStyle}
+          className="absolute top-3 right-3 z-[1000] h-10 px-3 rounded-xl bg-card/90 backdrop-blur-sm border border-border shadow-sm flex items-center gap-2 text-xs font-medium">
+          <Layers className="h-4 w-4" />
+          {MAP_TILES[mapStyle].name}
+        </button>
+
         {(locationError || permissionState === "denied") && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-[1000]">
             <div className="text-center space-y-3 px-6">
@@ -242,9 +279,7 @@ const MapView = () => {
                 <AlertCircle className="h-7 w-7 text-destructive" />
               </div>
               <p className="text-sm font-medium">Location Access Required</p>
-              <p className="text-xs text-muted-foreground max-w-xs">
-                {locationError || "Please allow location access in your browser settings to see the map."}
-              </p>
+              <p className="text-xs text-muted-foreground max-w-xs">{locationError}</p>
               <button onClick={requestLocation} className="bg-foreground text-background text-sm px-5 py-2.5 rounded-xl">
                 Request Permission
               </button>
@@ -265,41 +300,26 @@ const MapView = () => {
       </div>
 
       <div className="px-5 pb-24 space-y-3">
-        {/* Distance card */}
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Distance apart</p>
               <p className="text-3xl font-serif mt-1">{distance !== null ? formatDistance(distance) : "—"}</p>
               {partnerLocation && (
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {partnerName} • {timeAgo(partnerLocation.updated_at)}
-                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">{partnerName} • {timeAgo(partnerLocation.updated_at)}</p>
               )}
-              {!partnerId && (
-                <p className="text-[10px] text-muted-foreground mt-1">Link with partner in Settings</p>
-              )}
+              {!partnerId && <p className="text-[10px] text-muted-foreground mt-1">Link with partner in Settings</p>}
             </div>
-            <button
-              onClick={() => {
-                if (myLocation && mapInstanceRef.current) {
-                  mapInstanceRef.current.setView([myLocation.latitude, myLocation.longitude], 14);
-                }
-              }}
-              className="h-11 w-11 rounded-xl bg-foreground flex items-center justify-center"
-            >
+            <button onClick={centerOnMe} className="h-11 w-11 rounded-xl bg-foreground flex items-center justify-center">
               <Navigation className="h-5 w-5 text-background" />
             </button>
           </div>
         </div>
 
-        {/* Location status */}
         {myLocation && (
           <div className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-            <p className="text-[11px] text-muted-foreground">
-              Live location sharing • {myLocation.latitude.toFixed(4)}, {myLocation.longitude.toFixed(4)}
-            </p>
+            <p className="text-[11px] text-muted-foreground">Live location sharing • {myLocation.latitude.toFixed(4)}, {myLocation.longitude.toFixed(4)}</p>
           </div>
         )}
       </div>
