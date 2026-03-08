@@ -224,6 +224,39 @@ export type Database = {
         }
         Relationships: []
       }
+      playlist_songs: {
+        Row: {
+          added_by: string
+          artist: string
+          created_at: string
+          id: string
+          platform: string
+          song_url: string
+          thumbnail_url: string | null
+          title: string
+        }
+        Insert: {
+          added_by: string
+          artist?: string
+          created_at?: string
+          id?: string
+          platform?: string
+          song_url: string
+          thumbnail_url?: string | null
+          title: string
+        }
+        Update: {
+          added_by?: string
+          artist?: string
+          created_at?: string
+          id?: string
+          platform?: string
+          song_url?: string
+          thumbnail_url?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
