@@ -14,7 +14,234 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      countdowns: {
+        Row: {
+          created_at: string
+          creator_id: string
+          emoji: string | null
+          id: string
+          target_date: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          emoji?: string | null
+          id?: string
+          target_date: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          emoji?: string | null
+          id?: string
+          target_date?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      daily_answers: {
+        Row: {
+          answer: string
+          created_at: string
+          id: string
+          question: string
+          question_date: string
+          user_id: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          id?: string
+          question: string
+          question_date?: string
+          user_id: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          id?: string
+          question?: string
+          question_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gallery_items: {
+        Row: {
+          created_at: string
+          file_type: string
+          file_url: string
+          id: string
+          is_shared: boolean
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_type?: string
+          file_url: string
+          id?: string
+          is_shared?: boolean
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          file_type?: string
+          file_url?: string
+          id?: string
+          is_shared?: boolean
+          owner_id?: string
+        }
+        Relationships: []
+      }
+      locations: {
+        Row: {
+          id: string
+          latitude: number
+          longitude: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          latitude: number
+          longitude: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          latitude?: number
+          longitude?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      memories: {
+        Row: {
+          caption: string | null
+          created_at: string
+          creator_id: string
+          id: string
+          image_url: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          creator_id: string
+          id?: string
+          image_url?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          creator_id?: string
+          id?: string
+          image_url?: string | null
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string | null
+          created_at: string
+          disappear_at: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          is_read: boolean
+          message_type: string
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          disappear_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_read?: boolean
+          message_type?: string
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          disappear_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_read?: boolean
+          message_type?: string
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string
+          gallery_shared: boolean
+          id: string
+          mood_emoji: string | null
+          mood_text: string | null
+          mood_updated_at: string | null
+          partner_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          gallery_shared?: boolean
+          id?: string
+          mood_emoji?: string | null
+          mood_text?: string | null
+          mood_updated_at?: string | null
+          partner_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string
+          gallery_shared?: boolean
+          id?: string
+          mood_emoji?: string | null
+          mood_text?: string | null
+          mood_updated_at?: string | null
+          partner_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      taps: {
+        Row: {
+          created_at: string
+          id: string
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sender_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
