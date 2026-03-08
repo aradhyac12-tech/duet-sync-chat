@@ -129,15 +129,33 @@ const Settings = () => {
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Partner</h2>
           {currentPartner ? (
-            <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-lg">💕</div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">{partnerName}</p>
-                <p className="text-[11px] text-muted-foreground">Linked</p>
+            <div className="space-y-2">
+              <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-lg">💕</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{partnerName}</p>
+                  <p className="text-[11px] text-muted-foreground">Linked</p>
+                </div>
+                <button onClick={unlinkPartner} className="h-8 px-3 rounded-lg bg-muted text-xs flex items-center gap-1">
+                  <Unlink className="h-3 w-3" /> Unlink
+                </button>
               </div>
-              <button onClick={unlinkPartner} className="h-8 px-3 rounded-lg bg-muted text-xs flex items-center gap-1">
-                <Unlink className="h-3 w-3" /> Unlink
-              </button>
+              {/* Pet name */}
+              <div className="bg-card rounded-2xl border border-border p-4">
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">Pet name for {partnerName}</p>
+                {editingPetName ? (
+                  <div className="flex gap-2">
+                    <Input value={petName} onChange={(e) => setPetName(e.target.value)}
+                      placeholder="e.g. Baby, Love, Jaan..."
+                      className="h-9 rounded-xl text-sm flex-1" autoFocus />
+                    <Button onClick={savePetName} size="sm" className="rounded-xl bg-foreground text-background h-9 px-4">Save</Button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditingPetName(true)} className="text-sm text-left w-full">
+                    {petName || <span className="text-muted-foreground">Tap to set a pet name</span>}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <button onClick={() => setShowPartnerDialog(true)}
