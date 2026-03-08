@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { MessageCircle, Image, Phone, MapPin, Heart, Settings } from "lucide-react";
-import { motion, useMotionValueEvent, useScroll } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 
@@ -12,7 +12,6 @@ const tabs = [
   { path: "/us", icon: Heart, label: "Us" },
 ];
 
-// Pages where nav should always be hidden
 const HIDDEN_PAGES = ["/settings"];
 
 const BottomNav = () => {
@@ -21,47 +20,37 @@ const BottomNav = () => {
   const [isVisible, setIsVisible] = useState(true);
   const lastScrollY = useRef(0);
 
-  // Hide on specific pages
-  if (HIDDEN_PAGES.includes(location.pathname)) return null;
+  const isHidden = HIDDEN_PAGES.includes(location.pathname);
 
-  // Scroll-based auto-hide: listen on window scroll
+  // Scroll-based auto-hide
   useEffect(() => {
+    if (isHidden) return;
     let ticking = false;
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const currentY = window.scrollY;
           const delta = currentY - lastScrollY.current;
-
-          // Scrolling down more than 8px → hide
-          if (delta > 8 && currentY > 60) {
-            setIsVisible(false);
-          }
-          // Scrolling up more than 8px → show
-          else if (delta < -8) {
-            setIsVisible(true);
-          }
-          // At top of page → always show
-          if (currentY < 20) {
-            setIsVisible(true);
-          }
-
+          if (delta > 8 && currentY > 60) setIsVisible(false);
+          else if (delta < -8) setIsVisible(true);
+          if (currentY < 20) setIsVisible(true);
           lastScrollY.current = currentY;
           ticking = false;
         });
         ticking = true;
       }
     };
-
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isHidden]);
 
-  // Reset visibility on page change
+  // Reset on page change
   useEffect(() => {
     setIsVisible(true);
     lastScrollY.current = 0;
   }, [location.pathname]);
+
+  if (isHidden) return null;
 
   return (
     <motion.nav
