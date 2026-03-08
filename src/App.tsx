@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import AppLayout from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Chat from "@/pages/Chat";
@@ -11,6 +12,7 @@ import Gallery from "@/pages/Gallery";
 import Calls from "@/pages/Calls";
 import MapView from "@/pages/MapView";
 import Us from "@/pages/Us";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,24 +42,27 @@ const AuthRoute = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={<AuthRoute />} />
-          <Route path="/" element={<Navigate to="/chat" replace />} />
-          <Route element={<ProtectedRoutes />}>
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/gallery" element={<Gallery />} />
-            <Route path="/calls" element={<Calls />} />
-            <Route path="/map" element={<MapView />} />
-            <Route path="/us" element={<Us />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<AuthRoute />} />
+            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route element={<ProtectedRoutes />}>
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/gallery" element={<Gallery />} />
+              <Route path="/calls" element={<Calls />} />
+              <Route path="/map" element={<MapView />} />
+              <Route path="/us" element={<Us />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

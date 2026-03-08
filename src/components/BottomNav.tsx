@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { MessageCircle, Image, Phone, MapPin, Heart } from "lucide-react";
+import { MessageCircle, Image, Phone, MapPin, Heart, Settings } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,9 @@ const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Hide nav on settings page
+  if (location.pathname === "/settings") return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl border-t border-border safe-bottom">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
@@ -26,7 +29,7 @@ const BottomNav = () => {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-0.5 w-16 h-14 rounded-2xl transition-colors",
+                "relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-2xl transition-colors",
                 isActive ? "text-foreground" : "text-muted-foreground"
               )}
             >
@@ -42,6 +45,14 @@ const BottomNav = () => {
             </button>
           );
         })}
+        {/* Settings icon */}
+        <button
+          onClick={() => navigate("/settings")}
+          className="relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-2xl text-muted-foreground transition-colors"
+        >
+          <Settings className="h-5 w-5" strokeWidth={1.8} />
+          <span className="text-[10px] font-medium tracking-wide">More</span>
+        </button>
       </div>
     </nav>
   );
