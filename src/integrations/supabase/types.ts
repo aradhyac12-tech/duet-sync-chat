@@ -230,11 +230,14 @@ export type Database = {
           created_at: string
           display_name: string
           gallery_shared: boolean
+          gender: string | null
           id: string
           mood_emoji: string | null
           mood_text: string | null
           mood_updated_at: string | null
           partner_id: string | null
+          pet_name: string | null
+          phone_number: string | null
           public_key: string | null
           updated_at: string
           user_id: string
@@ -244,11 +247,14 @@ export type Database = {
           created_at?: string
           display_name?: string
           gallery_shared?: boolean
+          gender?: string | null
           id?: string
           mood_emoji?: string | null
           mood_text?: string | null
           mood_updated_at?: string | null
           partner_id?: string | null
+          pet_name?: string | null
+          phone_number?: string | null
           public_key?: string | null
           updated_at?: string
           user_id: string
@@ -258,11 +264,14 @@ export type Database = {
           created_at?: string
           display_name?: string
           gallery_shared?: boolean
+          gender?: string | null
           id?: string
           mood_emoji?: string | null
           mood_text?: string | null
           mood_updated_at?: string | null
           partner_id?: string | null
+          pet_name?: string | null
+          phone_number?: string | null
           public_key?: string | null
           updated_at?: string
           user_id?: string
