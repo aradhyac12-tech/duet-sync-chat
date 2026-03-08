@@ -209,7 +209,7 @@ const Us = () => {
               <Zap className="h-5 w-5 text-foreground" />
             </div>
             <p className="text-sm font-medium">Thinking of You</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Send a gentle tap 💫</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Send a gentle tap to {(() => { const p = getPronouns(partnerProfile?.gender as Gender); return p.object; })()} 💫</p>
           </motion.button>
         </div>
 
