@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { MessageCircle, Image, Phone, Heart, Settings, Music } from "lucide-react";
+import { MessageCircle, Image, Phone, Heart, Settings, Music, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
