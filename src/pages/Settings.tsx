@@ -43,15 +43,31 @@ const Settings = () => {
   const [partnerEmail, setPartnerEmail] = useState("");
   const [currentPartner, setCurrentPartner] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
+  const [petName, setPetName] = useState("");
+  const [editingPetName, setEditingPetName] = useState(false);
+  const [myProfile, setMyProfile] = useState<any>(null);
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data } = await supabase.from("profiles").select("partner_id").eq("user_id", user.id).single();
+      const { data } = await supabase.from("profiles").select("partner_id, display_name, gender, phone_number, pet_name").eq("user_id", user.id).single();
+      if (data) {
+        setMyProfile(data);
+        if (data.partner_id) {
+          setCurrentPartner(data.partner_id);
+          const { data: pp } = await supabase.from("profiles").select("display_name, pet_name").eq("user_id", data.partner_id).single();
+          if (pp) {
+            setPartnerName(pp.display_name);
+            // pet_name on partner's profile = what they call us. We want to edit the pet_name on OUR partner's row
+          }
+        }
+      }
+      // Get pet name we've given our partner (stored on partner's profile)
       if (data?.partner_id) {
-        setCurrentPartner(data.partner_id);
-        const { data: pp } = await supabase.from("profiles").select("display_name").eq("user_id", data.partner_id).single();
-        if (pp) setPartnerName(pp.display_name);
+        const { data: pp } = await supabase.from("profiles").select("pet_name").eq("user_id", data.partner_id).single();
+        // Actually, pet_name should be stored on OUR profile as what our PARTNER calls us
+        // Let's store it differently: pet_name on a profile = what their partner calls them
+        if (pp) setPetName(pp.pet_name || "");
       }
     };
     load();
@@ -74,6 +90,14 @@ const Settings = () => {
     setPartnerName(partner.display_name);
     setShowPartnerDialog(false);
     toast({ title: "Linked! 💕", description: `You're now connected with ${partner.display_name}` });
+  };
+
+  const savePetName = async () => {
+    if (!user || !currentPartner) return;
+    // Store pet_name on the partner's profile (what WE call them)
+    await supabase.from("profiles").update({ pet_name: petName.trim() || null }).eq("user_id", currentPartner);
+    setEditingPetName(false);
+    toast({ title: "Pet name saved 💕" });
   };
 
   const unlinkPartner = async () => {
@@ -105,15 +129,33 @@ const Settings = () => {
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Partner</h2>
           {currentPartner ? (
-            <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-lg">💕</div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">{partnerName}</p>
-                <p className="text-[11px] text-muted-foreground">Linked</p>
+            <div className="space-y-2">
+              <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-lg">💕</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{partnerName}</p>
+                  <p className="text-[11px] text-muted-foreground">Linked</p>
+                </div>
+                <button onClick={unlinkPartner} className="h-8 px-3 rounded-lg bg-muted text-xs flex items-center gap-1">
+                  <Unlink className="h-3 w-3" /> Unlink
+                </button>
               </div>
-              <button onClick={unlinkPartner} className="h-8 px-3 rounded-lg bg-muted text-xs flex items-center gap-1">
-                <Unlink className="h-3 w-3" /> Unlink
-              </button>
+              {/* Pet name */}
+              <div className="bg-card rounded-2xl border border-border p-4">
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-2">Pet name for {partnerName}</p>
+                {editingPetName ? (
+                  <div className="flex gap-2">
+                    <Input value={petName} onChange={(e) => setPetName(e.target.value)}
+                      placeholder="e.g. Baby, Love, Jaan..."
+                      className="h-9 rounded-xl text-sm flex-1" autoFocus />
+                    <Button onClick={savePetName} size="sm" className="rounded-xl bg-foreground text-background h-9 px-4">Save</Button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditingPetName(true)} className="text-sm text-left w-full">
+                    {petName || <span className="text-muted-foreground">Tap to set a pet name</span>}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <button onClick={() => setShowPartnerDialog(true)}

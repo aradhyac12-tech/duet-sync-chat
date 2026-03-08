@@ -1,6 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Smile, Timer, Zap, HelpCircle, Flame, Plus, X, Send, Settings } from "lucide-react";
+import { getPronouns, type Gender } from "@/lib/pronouns";
 import MemoryWall from "@/components/MemoryWall";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -179,7 +180,7 @@ const Us = () => {
               {partnerProfile?.mood_emoji || "😊"}
             </button>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{partnerProfile?.display_name || "Partner"}</p>
+              <p className="text-sm font-medium">{partnerProfile?.pet_name || partnerProfile?.display_name || "Partner"}</p>
               <p className="text-xs text-muted-foreground truncate">
                 {partnerProfile?.mood_text || "No mood set"} • {moodTime}
               </p>
@@ -208,7 +209,7 @@ const Us = () => {
               <Zap className="h-5 w-5 text-foreground" />
             </div>
             <p className="text-sm font-medium">Thinking of You</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Send a gentle tap 💫</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Send a gentle tap to {(() => { const p = getPronouns(partnerProfile?.gender as Gender); return p.object; })()} 💫</p>
           </motion.button>
         </div>
 
@@ -262,7 +263,7 @@ const Us = () => {
             )}
             {partnerAnswer && (
               <div className="bg-sand/30 rounded-xl p-3">
-                <p className="text-[11px] text-muted-foreground mb-1">{partnerProfile?.display_name || "Partner"}</p>
+                <p className="text-[11px] text-muted-foreground mb-1">{partnerProfile?.pet_name || partnerProfile?.display_name || "Partner"}</p>
                 <p className="text-sm">{partnerAnswer}</p>
               </div>
             )}
