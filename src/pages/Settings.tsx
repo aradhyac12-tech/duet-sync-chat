@@ -92,6 +92,14 @@ const Settings = () => {
     toast({ title: "Linked! 💕", description: `You're now connected with ${partner.display_name}` });
   };
 
+  const savePetName = async () => {
+    if (!user || !currentPartner) return;
+    // Store pet_name on the partner's profile (what WE call them)
+    await supabase.from("profiles").update({ pet_name: petName.trim() || null }).eq("user_id", currentPartner);
+    setEditingPetName(false);
+    toast({ title: "Pet name saved 💕" });
+  };
+
   const unlinkPartner = async () => {
     if (!user || !currentPartner) return;
     await supabase.from("profiles").update({ partner_id: null }).eq("user_id", user.id);
