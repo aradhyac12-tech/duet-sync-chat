@@ -22,7 +22,6 @@ Deno.serve(async (req) => {
     const { action, roomName } = await req.json();
 
     if (action === 'create-room') {
-      // Create a room that expires in 1 hour
       const response = await fetch('https://api.daily.co/v1/rooms', {
         method: 'POST',
         headers: {
@@ -32,13 +31,13 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           name: roomName || `duo-${Date.now()}`,
           properties: {
-            exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
+            exp: Math.floor(Date.now() / 1000) + 18000, // 5 hours
             enable_chat: false,
             enable_knocking: false,
             max_participants: 2,
             enable_network_ui: false,
             enable_prejoin_ui: false,
-            enable_screenshare: false,
+            enable_screenshare: true,
             enable_recording: false,
             start_video_off: false,
             start_audio_off: false,
@@ -61,7 +60,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'get-token') {
-      // Create a meeting token for authenticated access
       const response = await fetch('https://api.daily.co/v1/meeting-tokens', {
         method: 'POST',
         headers: {
@@ -71,9 +69,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           properties: {
             room_name: roomName,
-            exp: Math.floor(Date.now() / 1000) + 3600,
+            exp: Math.floor(Date.now() / 1000) + 18000, // 5 hours
             is_owner: true,
             enable_recording: false,
+            enable_screenshare: true,
           },
         }),
       });

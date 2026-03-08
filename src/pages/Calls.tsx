@@ -1,6 +1,6 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Wifi, Mic, MicOff, VideoIcon, VideoOff, PhoneOff, Maximize2 } from "lucide-react";
+import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Wifi, Mic, MicOff, VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -29,6 +29,14 @@ const qualityLabels: Record<NetworkQuality, { label: string; resolution: string;
   poor: { label: "Poor", resolution: "360p", color: "text-destructive" },
 };
 
+const formatDuration = (seconds: number) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
 const Calls = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -36,10 +44,11 @@ const Calls = () => {
   const [isStartingCall, setIsStartingCall] = useState(false);
 
   const {
-    joinCall, leaveCall, toggleAudio, toggleVideo,
-    isAudioOn, isVideoOn, callState,
-    localVideoRef, remoteVideoRef,
+    joinCall, leaveCall, toggleAudio, toggleVideo, toggleScreenShare,
+    isAudioOn, isVideoOn, isScreenSharing, callState,
+    localVideoRef, remoteVideoRef, screenShareRef,
     networkQuality: callNetworkQuality, participantCount, error,
+    callDuration,
   } = useDailyCall();
 
   // Browser network quality detection
@@ -77,7 +86,6 @@ const Calls = () => {
         throw new Error(data?.error || fnError?.message || "Failed to create room");
       }
 
-      // Get a token
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke("daily-call", {
         body: { action: "get-token", roomName: data.name },
       });
@@ -88,7 +96,6 @@ const Calls = () => {
 
       await joinCall(data.url, tokenData.token);
 
-      // If voice only, turn off video
       if (mode === "voice") {
         toggleVideo();
       }
@@ -110,12 +117,21 @@ const Calls = () => {
   if (callState === "joined" || callState === "joining") {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-foreground relative">
-        {/* Remote video (full screen) */}
+        {/* Remote video or screen share (full screen) */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`absolute inset-0 w-full h-full object-cover ${isScreenSharing ? "hidden" : ""}`}
+        />
+
+        {/* Screen share view (when partner is sharing) */}
+        <video
+          ref={screenShareRef}
+          autoPlay
+          playsInline
+          className="absolute inset-0 w-full h-full object-contain bg-black hidden"
+          style={{ display: "none" }}
         />
 
         {/* If no remote participant, show waiting */}
@@ -139,11 +155,12 @@ const Calls = () => {
           </div>
         )}
 
-        {/* Local video (picture-in-picture) */}
+        {/* Local video (picture-in-picture) - draggable */}
         <motion.div
           drag
-          dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-          className="absolute top-14 right-4 w-28 h-40 rounded-2xl overflow-hidden shadow-lg border-2 border-background/20 z-10"
+          dragMomentum={false}
+          dragElastic={0.1}
+          className="absolute top-14 right-4 w-28 h-40 rounded-2xl overflow-hidden shadow-lg border-2 border-background/20 z-10 cursor-grab active:cursor-grabbing"
         >
           <video
             ref={localVideoRef}
@@ -159,22 +176,54 @@ const Calls = () => {
           )}
         </motion.div>
 
-        {/* Network quality badge */}
-        <div className="absolute top-4 left-4 z-10 bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2">
-          <Wifi className="h-3.5 w-3.5 text-background" />
-          <span className="text-xs text-background font-medium">{quality.resolution}</span>
+        {/* Top bar: quality + duration */}
+        <div className="absolute top-4 left-4 right-16 z-10 flex items-center gap-2">
+          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2">
+            <Wifi className="h-3.5 w-3.5 text-background" />
+            <span className="text-xs text-background font-medium">{quality.resolution}</span>
+          </div>
+          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5">
+            <span className="text-xs text-background font-medium font-mono">{formatDuration(callDuration)}</span>
+          </div>
+          {isScreenSharing && (
+            <div className="bg-primary/80 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5">
+              <Monitor className="h-3 w-3 text-background" />
+              <span className="text-[10px] text-background font-medium">Sharing</span>
+            </div>
+          )}
         </div>
 
         {/* Call controls */}
         <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-3">
             <button
               onClick={toggleAudio}
-              className={`h-14 w-14 rounded-full flex items-center justify-center transition-colors ${
+              className={`h-13 w-13 rounded-full flex items-center justify-center transition-colors ${
                 isAudioOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"
               }`}
+              style={{ width: 52, height: 52 }}
             >
-              {isAudioOn ? <Mic className="h-6 w-6 text-background" /> : <MicOff className="h-6 w-6 text-background" />}
+              {isAudioOn ? <Mic className="h-5 w-5 text-background" /> : <MicOff className="h-5 w-5 text-background" />}
+            </button>
+
+            <button
+              onClick={toggleVideo}
+              className={`rounded-full flex items-center justify-center transition-colors ${
+                isVideoOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"
+              }`}
+              style={{ width: 52, height: 52 }}
+            >
+              {isVideoOn ? <VideoIcon className="h-5 w-5 text-background" /> : <VideoOff className="h-5 w-5 text-background" />}
+            </button>
+
+            <button
+              onClick={toggleScreenShare}
+              className={`rounded-full flex items-center justify-center transition-colors ${
+                isScreenSharing ? "bg-primary" : "bg-background/20 backdrop-blur-md"
+              }`}
+              style={{ width: 52, height: 52 }}
+            >
+              {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" /> : <Monitor className="h-5 w-5 text-background" />}
             </button>
 
             <button
@@ -182,15 +231,6 @@ const Calls = () => {
               className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg"
             >
               <PhoneOff className="h-7 w-7 text-background" />
-            </button>
-
-            <button
-              onClick={toggleVideo}
-              className={`h-14 w-14 rounded-full flex items-center justify-center transition-colors ${
-                isVideoOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"
-              }`}
-            >
-              {isVideoOn ? <VideoIcon className="h-6 w-6 text-background" /> : <VideoOff className="h-6 w-6 text-background" />}
             </button>
           </div>
         </div>
@@ -204,7 +244,6 @@ const Calls = () => {
       <PageHeader title="Calls" subtitle="Stay connected" />
 
       <div className="px-5 space-y-6 pb-24">
-        {/* Error display */}
         {error && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-3">
             <p className="text-sm text-destructive">{error}</p>
@@ -217,7 +256,7 @@ const Calls = () => {
             <Wifi className={`h-5 w-5 ${quality.color}`} />
             <div className="flex-1">
               <p className="text-sm font-medium">Network: {quality.label}</p>
-              <p className="text-[11px] text-muted-foreground">Auto quality: {quality.resolution}</p>
+              <p className="text-[11px] text-muted-foreground">Auto quality: {quality.resolution} • Up to 5hr calls</p>
             </div>
             <span className={`text-xs px-2 py-1 rounded-lg bg-muted ${quality.color}`}>
               {activeQuality === "excellent" ? "🟢" : activeQuality === "good" ? "🟡" : activeQuality === "fair" ? "🟠" : "🔴"}
@@ -250,6 +289,16 @@ const Calls = () => {
               <span className="text-[10px] text-muted-foreground">{quality.resolution}</span>
             </div>
           </button>
+        </div>
+
+        {/* Features info */}
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Call Features</h3>
+          <div className="flex flex-wrap gap-2">
+            {["HD Video", "Screen Share", "5hr Duration", "Adaptive Bitrate", "PiP Mode"].map((f) => (
+              <span key={f} className="text-[11px] bg-accent/50 text-foreground px-2.5 py-1 rounded-lg">{f}</span>
+            ))}
+          </div>
         </div>
 
         {/* Call history */}
