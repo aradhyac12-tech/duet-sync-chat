@@ -1,6 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Smile, Timer, Zap, Star, HelpCircle, Flame, Plus, X, Send, Settings } from "lucide-react";
+import { Smile, Timer, Zap, HelpCircle, Flame, Plus, X, Send, Settings } from "lucide-react";
+import MemoryWall from "@/components/MemoryWall";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
