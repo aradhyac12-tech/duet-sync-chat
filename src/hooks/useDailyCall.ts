@@ -53,9 +53,6 @@ export const useDailyCall = (): UseDailyCallReturn => {
 
       const call = DailyIframe.createCallObject({
         subscribeToTracksAutomatically: true,
-        dailyConfig: {
-          experimentalChromeVideoMuteLightOff: true,
-        },
       });
 
       callRef.current = call;
