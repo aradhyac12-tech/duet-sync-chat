@@ -128,7 +128,7 @@ const MapView = () => {
   // Fetch partner location
   useEffect(() => {
     if (!partnerId) return;
-    supabase.from("locations").select("*").eq("user_id", partnerId).single()
+    supabase.from("locations").select("*").eq("user_id", partnerId).maybeSingle()
       .then(({ data }) => { if (data) setPartnerLocation(data); });
 
     const channel = supabase.channel("partner-location")
