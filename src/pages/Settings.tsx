@@ -1,10 +1,18 @@
 import PageHeader from "@/components/PageHeader";
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
-import { ChevronLeft, Check, ImageIcon, X, Shield, Bell, Fingerprint, Vibrate } from "lucide-react";
+import { ChevronLeft, Check, ImageIcon, X, Shield, Bell, Fingerprint, Vibrate, Link2, Unlink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 
 const themes: { id: ThemeColor; name: string; preview: string; accent: string }[] = [
   { id: "soft-neutral", name: "Soft Neutral", preview: "bg-[hsl(30,25%,96%)]", accent: "bg-[hsl(28,15%,72%)]" },
@@ -27,7 +35,56 @@ const presetWallpapers = [
 const Settings = () => {
   const { theme, setTheme, chatWallpaper, setChatWallpaper } = useTheme();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
+  const [showPartnerDialog, setShowPartnerDialog] = useState(false);
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [currentPartner, setCurrentPartner] = useState<string | null>(null);
+  const [partnerName, setPartnerName] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const { data } = await supabase.from("profiles").select("partner_id").eq("user_id", user.id).single();
+      if (data?.partner_id) {
+        setCurrentPartner(data.partner_id);
+        const { data: pp } = await supabase.from("profiles").select("display_name").eq("user_id", data.partner_id).single();
+        if (pp) setPartnerName(pp.display_name);
+      }
+    };
+    load();
+  }, [user]);
+
+  const linkPartner = async () => {
+    if (!user || !partnerEmail.trim()) return;
+    // Find partner by email in profiles (display_name might be email)
+    const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").neq("user_id", user.id);
+    const partner = profiles?.find((p) => p.display_name === partnerEmail || p.user_id === partnerEmail);
+    
+    if (!partner) {
+      toast({ title: "Not found", description: "No user found with that email. They need to sign up first.", variant: "destructive" });
+      return;
+    }
+
+    // Link both profiles
+    await supabase.from("profiles").update({ partner_id: partner.user_id }).eq("user_id", user.id);
+    await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", partner.user_id);
+    
+    setCurrentPartner(partner.user_id);
+    setPartnerName(partner.display_name);
+    setShowPartnerDialog(false);
+    toast({ title: "Linked! 💕", description: `You're now connected with ${partner.display_name}` });
+  };
+
+  const unlinkPartner = async () => {
+    if (!user || !currentPartner) return;
+    await supabase.from("profiles").update({ partner_id: null }).eq("user_id", user.id);
+    await supabase.from("profiles").update({ partner_id: null }).eq("user_id", currentPartner);
+    setCurrentPartner(null);
+    setPartnerName("");
+    toast({ title: "Unlinked" });
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen pb-24">
@@ -38,19 +95,41 @@ const Settings = () => {
       </PageHeader>
 
       <div className="px-5 space-y-6">
+        {/* Partner Link */}
+        <section>
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Partner</h2>
+          {currentPartner ? (
+            <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-lg">💕</div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">{partnerName}</p>
+                <p className="text-[11px] text-muted-foreground">Linked</p>
+              </div>
+              <button onClick={unlinkPartner} className="h-8 px-3 rounded-lg bg-muted text-xs flex items-center gap-1">
+                <Unlink className="h-3 w-3" /> Unlink
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowPartnerDialog(true)}
+              className="w-full bg-card rounded-2xl border border-border p-4 flex items-center gap-3 text-left">
+              <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center">
+                <Link2 className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Link with partner</p>
+                <p className="text-[11px] text-muted-foreground">Connect to start sharing</p>
+              </div>
+            </button>
+          )}
+        </section>
+
         {/* Theme Picker */}
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Color Theme</h2>
           <div className="grid grid-cols-3 gap-3">
             {themes.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTheme(t.id)}
-                className={cn(
-                  "relative rounded-2xl border-2 p-3 transition-all",
-                  theme === t.id ? "border-foreground" : "border-border"
-                )}
-              >
+              <button key={t.id} onClick={() => setTheme(t.id)}
+                className={cn("relative rounded-2xl border-2 p-3 transition-all", theme === t.id ? "border-foreground" : "border-border")}>
                 <div className="flex gap-1.5 mb-2">
                   <div className={cn("h-6 w-6 rounded-lg", t.preview)} />
                   <div className={cn("h-6 w-6 rounded-lg", t.accent)} />
@@ -78,21 +157,13 @@ const Settings = () => {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {presetWallpapers.map((wp) => (
-              <button
-                key={wp.id}
-                onClick={() => setChatWallpaper(wp.style)}
-                className={cn(
-                  "aspect-[3/4] rounded-xl border-2 transition-all",
-                  chatWallpaper === wp.style ? "border-foreground" : "border-border"
-                )}
-                style={{ background: wp.style }}
-              />
+              <button key={wp.id} onClick={() => setChatWallpaper(wp.style)}
+                className={cn("aspect-[3/4] rounded-xl border-2 transition-all", chatWallpaper === wp.style ? "border-foreground" : "border-border")}
+                style={{ background: wp.style }} />
             ))}
           </div>
-          <button
-            onClick={() => setShowWallpaperPicker(!showWallpaperPicker)}
-            className="mt-3 w-full flex items-center gap-2 bg-card rounded-xl border border-border p-3 text-sm"
-          >
+          <button onClick={() => setShowWallpaperPicker(!showWallpaperPicker)}
+            className="mt-3 w-full flex items-center gap-2 bg-card rounded-xl border border-border p-3 text-sm">
             <ImageIcon className="h-4 w-4 text-muted-foreground" />
             <span>Choose from gallery</span>
           </button>
@@ -101,28 +172,21 @@ const Settings = () => {
               <label className="flex flex-col items-center gap-2 cursor-pointer">
                 <ImageIcon className="h-8 w-8 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">Select an image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
+                <input type="file" accept="image/*" className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onload = () => {
-                        setChatWallpaper(`url(${reader.result})`);
-                        setShowWallpaperPicker(false);
-                      };
+                      reader.onload = () => { setChatWallpaper(`url(${reader.result})`); setShowWallpaperPicker(false); };
                       reader.readAsDataURL(file);
                     }
-                  }}
-                />
+                  }} />
               </label>
             </div>
           )}
         </section>
 
-        {/* Native Features */}
+        {/* Device features */}
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Device Features</h2>
           <div className="space-y-1">
@@ -151,17 +215,29 @@ const Settings = () => {
         {/* Account */}
         <section>
           <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Account</h2>
+          <p className="text-xs text-muted-foreground mb-2">{user?.email}</p>
           <button
-            onClick={async () => {
-              const { supabase } = await import("@/integrations/supabase/client");
-              await supabase.auth.signOut();
-            }}
-            className="w-full bg-card rounded-xl border border-border p-3 text-sm text-destructive text-center"
-          >
+            onClick={async () => { await supabase.auth.signOut(); }}
+            className="w-full bg-card rounded-xl border border-border p-3 text-sm text-destructive text-center">
             Sign Out
           </button>
         </section>
       </div>
+
+      {/* Partner link dialog */}
+      <Dialog open={showPartnerDialog} onOpenChange={setShowPartnerDialog}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Link with your partner</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Enter your partner's name or email. They need to have an account first.</p>
+          <Input value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)}
+            placeholder="Partner's name or email" className="rounded-xl" />
+          <DialogFooter>
+            <Button onClick={linkPartner} className="rounded-xl bg-foreground text-background w-full">Link</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 };

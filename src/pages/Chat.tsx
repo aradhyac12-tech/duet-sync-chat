@@ -1,91 +1,151 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 interface Message {
   id: string;
-  text: string;
-  sender: "me" | "them";
-  time: string;
-  type: "text" | "image" | "file";
-  fileName?: string;
-  fileUrl?: string;
+  content: string | null;
+  sender_id: string;
+  message_type: string;
+  file_url: string | null;
+  file_name: string | null;
+  created_at: string;
+  is_read: boolean;
 }
-
-const initialMessages: Message[] = [
-  { id: "1", text: "Hey, how's your day going? 💫", sender: "them", time: "2:34 PM", type: "text" },
-  { id: "2", text: "Amazing now that you texted ✨", sender: "me", time: "2:35 PM", type: "text" },
-  { id: "3", text: "Miss you! When are we meeting? 🤍", sender: "them", time: "2:36 PM", type: "text" },
-];
 
 const Chat = () => {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { chatWallpaper } = useTheme();
+  const { user } = useAuth();
 
-  const handleSend = () => {
-    if (!message.trim()) return;
-    const newMsg: Message = {
-      id: Date.now().toString(),
-      text: message,
-      sender: "me",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      type: "text",
+  // Fetch partner
+  useEffect(() => {
+    if (!user) return;
+    const fetchPartner = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("partner_id")
+        .eq("user_id", user.id)
+        .single();
+      if (data?.partner_id) setPartnerId(data.partner_id);
     };
-    setMessages((prev) => [...prev, newMsg]);
+    fetchPartner();
+  }, [user]);
+
+  // Fetch messages
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (data) setMessages(data);
+    };
+    fetchMessages();
+  }, [user, partnerId]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("messages-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new as Message;
+        if (msg.sender_id === user.id || msg.receiver_id === user.id) {
+          setMessages((prev) => [...prev, msg]);
+        }
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
+        // Refetch on delete
+        if (partnerId) {
+          supabase
+            .from("messages")
+            .select("*")
+            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+            .order("created_at", { ascending: true })
+            .limit(200)
+            .then(({ data }) => { if (data) setMessages(data); });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, partnerId]);
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = useCallback(async () => {
+    if (!message.trim() || !user || !partnerId) return;
+    const text = message;
     setMessage("");
-  };
+    await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: partnerId,
+      content: text,
+      message_type: "text",
+    });
+  }, [message, user, partnerId]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const newMsg: Message = {
-      id: Date.now().toString(),
-      text: type === "image" ? "📷 Photo" : `📎 ${file.name}`,
-      sender: "me",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      type,
-      fileName: file.name,
-      fileUrl: URL.createObjectURL(file),
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    if (!file || !user || !partnerId) return;
     setShowAttach(false);
+
+    const path = `${user.id}/${Date.now()}_${file.name}`;
+    const { data: uploadData } = await supabase.storage.from("chat-files").upload(path, file);
+    if (!uploadData) return;
+
+    const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
+
+    await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: partnerId,
+      content: type === "image" ? "📷 Photo" : `📎 ${file.name}`,
+      message_type: type,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+    });
+    e.target.value = "";
   };
 
-  const clearChat = () => {
+  const clearChat = async () => {
+    if (!user || !partnerId) return;
+    await supabase
+      .from("messages")
+      .delete()
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`);
     setMessages([]);
     setShowClearDialog(false);
   };
 
+  const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col h-screen"
-    >
-      <PageHeader title="Chat" subtitle="Just the two of us">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen">
+      <PageHeader title="Chat" subtitle={partnerId ? "Connected" : "Set a partner in settings"}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">
@@ -100,44 +160,35 @@ const Chat = () => {
         </DropdownMenu>
       </PageHeader>
 
-      {/* Messages area */}
       <div
         className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
         style={chatWallpaper ? {
           backgroundImage: chatWallpaper.startsWith("url(") ? chatWallpaper : undefined,
           background: chatWallpaper.startsWith("linear") ? chatWallpaper : undefined,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundSize: "cover", backgroundPosition: "center",
         } : undefined}
       >
         <AnimatePresence>
           {messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"}`}
+            <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}
             >
-              <div
-                className={`rounded-2xl px-4 py-2.5 max-w-[75%] ${
-                  msg.sender === "me"
-                    ? "bg-primary/20 rounded-br-md"
-                    : "bg-card rounded-bl-md shadow-sm border border-border"
-                }`}
-              >
-                {msg.type === "image" && msg.fileUrl && (
-                  <img src={msg.fileUrl} alt="shared" className="rounded-lg mb-2 max-h-48 object-cover w-full" />
+              <div className={`rounded-2xl px-4 py-2.5 max-w-[75%] ${
+                msg.sender_id === user?.id ? "bg-primary/20 rounded-br-md" : "bg-card rounded-bl-md shadow-sm border border-border"
+              }`}>
+                {msg.message_type === "image" && msg.file_url && (
+                  <img src={msg.file_url} alt="shared" className="rounded-lg mb-2 max-h-48 object-cover w-full" />
                 )}
-                {msg.type === "file" && (
-                  <div className="flex items-center gap-2 mb-1 bg-muted/50 rounded-lg px-3 py-2">
+                {msg.message_type === "file" && msg.file_name && (
+                  <a href={msg.file_url || "#"} target="_blank" rel="noopener"
+                    className="flex items-center gap-2 mb-1 bg-muted/50 rounded-lg px-3 py-2">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-xs truncate">{msg.fileName}</span>
-                  </div>
+                    <span className="text-xs truncate">{msg.file_name}</span>
+                  </a>
                 )}
-                <p className="text-sm">{msg.text}</p>
-                <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.sender === "me" ? "text-right" : ""}`}>
-                  {msg.time}
+                {msg.content && <p className="text-sm">{msg.content}</p>}
+                <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.sender_id === user?.id ? "text-right" : ""}`}>
+                  {formatTime(msg.created_at)}
                 </span>
               </div>
             </motion.div>
@@ -145,87 +196,55 @@ const Chat = () => {
         </AnimatePresence>
 
         {messages.length === 0 && (
-          <div className="flex-1 flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">No messages yet. Say hi! 👋</p>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm text-muted-foreground">{partnerId ? "No messages yet. Say hi! 👋" : "Link with your partner to start chatting"}</p>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Attachment options */}
       <AnimatePresence>
         {showAttach && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="px-4 pb-2 flex gap-2"
-          >
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform"
-            >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="px-4 pb-2 flex gap-2">
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
               <ImageIcon className="h-4 w-4 text-muted-foreground" /> Photo
             </button>
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform"
-            >
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
               <Camera className="h-4 w-4 text-muted-foreground" /> Camera
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform"
-            >
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
               <FileText className="h-4 w-4 text-muted-foreground" /> File
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Input bar */}
       <div className="px-4 pb-20 pt-2">
         <div className="flex items-center gap-2 bg-card rounded-2xl border border-border px-3 py-2 shadow-sm">
-          <button
-            onClick={() => setShowAttach(!showAttach)}
-            className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button onClick={() => setShowAttach(!showAttach)} className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
             <Paperclip className="h-4 w-4" />
           </button>
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Type a message..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <button
-            onClick={handleSend}
-            className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center shrink-0 transition-transform active:scale-95"
-          >
+          <input type="text" value={message} onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Type a message..."
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <button onClick={handleSend} className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center shrink-0 transition-transform active:scale-95">
             <Send className="h-4 w-4 text-background" />
           </button>
         </div>
       </div>
 
-      {/* Hidden file inputs */}
       <input ref={imageInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
       <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
 
-      {/* Clear chat dialog */}
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>Clear chat?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove all messages. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will remove all messages. This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={clearChat} className="rounded-xl bg-destructive text-destructive-foreground">
-              Clear
-            </AlertDialogAction>
+            <AlertDialogAction onClick={clearChat} className="rounded-xl bg-destructive text-destructive-foreground">Clear</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
