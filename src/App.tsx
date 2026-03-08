@@ -12,6 +12,7 @@ import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
 import Gallery from "@/pages/Gallery";
 import Calls from "@/pages/Calls";
+import Playlist from "@/pages/Playlist";
 import MapView from "@/pages/MapView";
 import Us from "@/pages/Us";
 import Settings from "@/pages/Settings";
