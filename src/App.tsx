@@ -4,8 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import AppLayout from "@/components/AppLayout";
+import AppLockScreen from "@/components/AppLockScreen";
 import Auth from "@/pages/Auth";
 import Chat from "@/pages/Chat";
 import Gallery from "@/pages/Gallery";
@@ -19,6 +20,7 @@ const queryClient = new QueryClient();
 
 const ProtectedRoutes = () => {
   const { user, loading } = useAuth();
+  const { isAppLocked } = useTheme();
 
   if (loading) {
     return (
@@ -29,6 +31,8 @@ const ProtectedRoutes = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  if (isAppLocked) return <AppLockScreen />;
 
   return <AppLayout />;
 };
