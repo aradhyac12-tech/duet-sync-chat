@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      call_history: {
+        Row: {
+          call_direction: string
+          call_type: string
+          caller_id: string
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          receiver_id: string | null
+          room_name: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          call_direction?: string
+          call_type?: string
+          caller_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          receiver_id?: string | null
+          room_name?: string | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          call_direction?: string
+          call_type?: string
+          caller_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          receiver_id?: string | null
+          room_name?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       countdowns: {
         Row: {
           created_at: string
