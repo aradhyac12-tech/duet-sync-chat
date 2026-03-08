@@ -17,6 +17,7 @@ interface Message {
   id: string;
   content: string | null;
   sender_id: string;
+  receiver_id: string;
   message_type: string;
   file_url: string | null;
   file_name: string | null;
