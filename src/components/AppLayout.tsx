@@ -3,7 +3,7 @@ import BottomNav from "./BottomNav";
 import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence, PanInfo } from "framer-motion";
 
-const TAB_ORDER = ["/chat", "/gallery", "/calls", "/playlist", "/us"];
+const TAB_ORDER = ["/chat", "/gallery", "/calls", "/map", "/playlist", "/us"];
 const SWIPE_THRESHOLD = 50;
 const SWIPE_VELOCITY = 300;
 

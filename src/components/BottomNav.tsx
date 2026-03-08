@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { MessageCircle, Image, Phone, Heart, Settings, Music } from "lucide-react";
+import { MessageCircle, Image, Phone, Heart, Settings, Music, MapPin } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -11,6 +11,7 @@ const tabs = [
   { path: "/chat", icon: MessageCircle, label: "Chat", badgeKey: "messages" },
   { path: "/gallery", icon: Image, label: "Gallery" },
   { path: "/calls", icon: Phone, label: "Calls", badgeKey: "calls" },
+  { path: "/map", icon: MapPin, label: "Map" },
   { path: "/playlist", icon: Music, label: "Music" },
   { path: "/us", icon: Heart, label: "Us" },
 ];

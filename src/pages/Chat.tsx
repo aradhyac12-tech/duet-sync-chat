@@ -1,6 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Shield, Mic, Square, Play, Pause } from "lucide-react";
+import MessageStatus from "@/components/chat/MessageStatus";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,6 +156,10 @@ const Chat = () => {
             });
         }
       })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+        const updated = payload.new as Message;
+        setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, is_read: updated.is_read } : m));
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, partnerId, decrypt, decryptMessages]);
@@ -162,6 +167,24 @@ const Chat = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Mark incoming messages as read
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const unreadIds = messages
+      .filter((m) => m.sender_id === partnerId && !m.is_read)
+      .map((m) => m.id);
+    if (unreadIds.length === 0) return;
+    supabase
+      .from("messages")
+      .update({ is_read: true })
+      .in("id", unreadIds)
+      .then(() => {
+        setMessages((prev) =>
+          prev.map((m) => (unreadIds.includes(m.id) ? { ...m, is_read: true } : m))
+        );
+      });
+  }, [messages, user, partnerId]);
 
   // Voice recording
   const startRecording = async () => {
@@ -321,8 +344,9 @@ const Chat = () => {
                   </a>
                 )}
                 {msg.message_type !== "voice" && msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
-                <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.sender_id === user?.id ? "text-right" : ""}`}>
+                <span className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5 ${msg.sender_id === user?.id ? "justify-end" : ""}`}>
                   {formatTime(msg.created_at)}
+                  <MessageStatus isRead={msg.is_read} isMine={msg.sender_id === user?.id} />
                 </span>
               </div>
             </motion.div>
