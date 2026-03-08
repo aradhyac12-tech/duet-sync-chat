@@ -81,6 +81,7 @@ const App = () => (
               <Route path="/chat" element={<Chat />} />
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/calls" element={<Calls />} />
+              <Route path="/playlist" element={<Playlist />} />
               <Route path="/map" element={<MapView />} />
               <Route path="/us" element={<Us />} />
               <Route path="/settings" element={<Settings />} />
