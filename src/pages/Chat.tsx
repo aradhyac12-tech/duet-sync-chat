@@ -164,6 +164,24 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Mark incoming messages as read
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const unreadIds = messages
+      .filter((m) => m.sender_id === partnerId && !m.is_read)
+      .map((m) => m.id);
+    if (unreadIds.length === 0) return;
+    supabase
+      .from("messages")
+      .update({ is_read: true })
+      .in("id", unreadIds)
+      .then(() => {
+        setMessages((prev) =>
+          prev.map((m) => (unreadIds.includes(m.id) ? { ...m, is_read: true } : m))
+        );
+      });
+  }, [messages, user, partnerId]);
+
   // Voice recording
   const startRecording = async () => {
     try {
