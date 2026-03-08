@@ -263,7 +263,7 @@ const Us = () => {
             )}
             {partnerAnswer && (
               <div className="bg-sand/30 rounded-xl p-3">
-                <p className="text-[11px] text-muted-foreground mb-1">{partnerProfile?.display_name || "Partner"}</p>
+                <p className="text-[11px] text-muted-foreground mb-1">{partnerProfile?.pet_name || partnerProfile?.display_name || "Partner"}</p>
                 <p className="text-sm">{partnerAnswer}</p>
               </div>
             )}
