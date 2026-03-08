@@ -27,6 +27,7 @@ const ProtectedRoutes = () => {
   const { user, loading } = useAuth();
   const { isAppLocked } = useTheme();
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+  usePushNotifications(); // Initialize push notifications for native platforms
 
   useEffect(() => {
     if (!user) return;
