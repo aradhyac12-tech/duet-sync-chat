@@ -1,10 +1,11 @@
 import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Shield, ShieldOff } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useE2E } from "@/hooks/useE2E";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -25,9 +26,13 @@ interface Message {
   is_read: boolean;
 }
 
+interface DecryptedMessage extends Message {
+  decryptedContent: string | null;
+}
+
 const Chat = () => {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -36,6 +41,17 @@ const Chat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { chatWallpaper } = useTheme();
   const { user } = useAuth();
+  const { ready: e2eReady, encrypt, decrypt } = useE2E(user?.id, partnerId);
+
+  // Decrypt a batch of messages
+  const decryptMessages = useCallback(async (msgs: Message[]): Promise<DecryptedMessage[]> => {
+    return Promise.all(
+      msgs.map(async (msg) => ({
+        ...msg,
+        decryptedContent: msg.message_type === "text" ? await decrypt(msg.content) : msg.content,
+      }))
+    );
+  }, [decrypt]);
 
   // Fetch partner
   useEffect(() => {
@@ -61,24 +77,27 @@ const Chat = () => {
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
         .order("created_at", { ascending: true })
         .limit(200);
-      if (data) setMessages(data);
+      if (data) {
+        const decrypted = await decryptMessages(data);
+        setMessages(decrypted);
+      }
     };
     fetchMessages();
-  }, [user, partnerId]);
+  }, [user, partnerId, decryptMessages]);
 
   // Realtime subscription
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel("messages-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload) => {
         const msg = payload.new as Message;
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
-          setMessages((prev) => [...prev, msg]);
+          const decryptedContent = msg.message_type === "text" ? await decrypt(msg.content) : msg.content;
+          setMessages((prev) => [...prev, { ...msg, decryptedContent }]);
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
-        // Refetch on delete
         if (partnerId) {
           supabase
             .from("messages")
@@ -86,12 +105,17 @@ const Chat = () => {
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
             .order("created_at", { ascending: true })
             .limit(200)
-            .then(({ data }) => { if (data) setMessages(data); });
+            .then(async ({ data }) => {
+              if (data) {
+                const decrypted = await decryptMessages(data);
+                setMessages(decrypted);
+              }
+            });
         }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, partnerId]);
+  }, [user, partnerId, decrypt, decryptMessages]);
 
   // Auto-scroll
   useEffect(() => {
@@ -102,25 +126,23 @@ const Chat = () => {
     if (!message.trim() || !user || !partnerId) return;
     const text = message;
     setMessage("");
+    const encryptedText = e2eReady ? await encrypt(text) : text;
     await supabase.from("messages").insert({
       sender_id: user.id,
       receiver_id: partnerId,
-      content: text,
+      content: encryptedText,
       message_type: "text",
     });
-  }, [message, user, partnerId]);
+  }, [message, user, partnerId, encrypt, e2eReady]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
     const file = e.target.files?.[0];
     if (!file || !user || !partnerId) return;
     setShowAttach(false);
-
     const path = `${user.id}/${Date.now()}_${file.name}`;
     const { data: uploadData } = await supabase.storage.from("chat-files").upload(path, file);
     if (!uploadData) return;
-
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
-
     await supabase.from("messages").insert({
       sender_id: user.id,
       receiver_id: partnerId,
@@ -146,7 +168,7 @@ const Chat = () => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen">
-      <PageHeader title="Chat" subtitle={partnerId ? "Connected" : "Set a partner in settings"}>
+      <PageHeader title="Chat" subtitle={partnerId ? (e2eReady ? "🔒 End-to-end encrypted" : "Connected") : "Set a partner in settings"}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">
@@ -160,6 +182,14 @@ const Chat = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+
+      {/* E2E indicator */}
+      {e2eReady && (
+        <div className="px-5 py-1.5 flex items-center justify-center gap-1.5 bg-primary/5">
+          <Shield className="h-3 w-3 text-primary" />
+          <span className="text-[10px] text-primary font-medium">Messages are end-to-end encrypted</span>
+        </div>
+      )}
 
       <div
         className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
@@ -187,7 +217,7 @@ const Chat = () => {
                     <span className="text-xs truncate">{msg.file_name}</span>
                   </a>
                 )}
-                {msg.content && <p className="text-sm">{msg.content}</p>}
+                {msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
                 <span className={`text-[10px] text-muted-foreground mt-1 block ${msg.sender_id === user?.id ? "text-right" : ""}`}>
                   {formatTime(msg.created_at)}
                 </span>

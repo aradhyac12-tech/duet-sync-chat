@@ -244,14 +244,7 @@ const Us = () => {
           </div>
         </section>
 
-        {/* Memory wall placeholder */}
-        <section>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Memory Wall</h2>
-          <div className="bg-card rounded-2xl border border-border p-6 text-center shadow-sm">
-            <Star className="h-8 w-8 text-taupe/40 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Pin your favorite moments here</p>
-          </div>
-        </section>
+        <MemoryWall />
       </div>
 
       {/* Mood dialog */}
