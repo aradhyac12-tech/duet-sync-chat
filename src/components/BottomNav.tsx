@@ -1,13 +1,16 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { MessageCircle, Image, Phone, MapPin, Heart, Settings, Music } from "lucide-react";
+import { MessageCircle, Image, Phone, Heart, Settings, Music } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
 
 const tabs = [
-  { path: "/chat", icon: MessageCircle, label: "Chat" },
+  { path: "/chat", icon: MessageCircle, label: "Chat", badgeKey: "messages" },
   { path: "/gallery", icon: Image, label: "Gallery" },
-  { path: "/calls", icon: Phone, label: "Calls" },
+  { path: "/calls", icon: Phone, label: "Calls", badgeKey: "calls" },
   { path: "/playlist", icon: Music, label: "Music" },
   { path: "/us", icon: Heart, label: "Us" },
 ];
@@ -17,10 +20,76 @@ const HIDDEN_PAGES = ["/settings"];
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(true);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [missedCalls, setMissedCalls] = useState(0);
   const lastScrollY = useRef(0);
 
   const isHidden = HIDDEN_PAGES.includes(location.pathname);
+
+  // Fetch unread counts
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchCounts = async () => {
+      // Unread messages
+      const { count: msgCount } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("is_read", false);
+      setUnreadMessages(msgCount || 0);
+
+      // Missed calls (status = 'missed' and receiver_id = user)
+      const { count: callCount } = await supabase
+        .from("call_history")
+        .select("*", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("status", "missed");
+      setMissedCalls(callCount || 0);
+    };
+
+    fetchCounts();
+
+    // Subscribe to realtime updates for messages
+    const messagesChannel = supabase
+      .channel("unread-messages")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `receiver_id=eq.${user.id}` },
+        () => fetchCounts()
+      )
+      .subscribe();
+
+    // Subscribe to realtime updates for calls
+    const callsChannel = supabase
+      .channel("missed-calls")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "call_history", filter: `receiver_id=eq.${user.id}` },
+        () => fetchCounts()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(callsChannel);
+    };
+  }, [user]);
+
+  // Clear message badge when on chat page
+  useEffect(() => {
+    if (location.pathname === "/chat" && user) {
+      // Mark messages as read when viewing chat
+      supabase
+        .from("messages")
+        .update({ is_read: true })
+        .eq("receiver_id", user.id)
+        .eq("is_read", false)
+        .then(() => setUnreadMessages(0));
+    }
+  }, [location.pathname, user]);
 
   // Scroll-based auto-hide
   useEffect(() => {
@@ -52,6 +121,12 @@ const BottomNav = () => {
 
   if (isHidden) return null;
 
+  const getBadgeCount = (key?: string) => {
+    if (key === "messages") return unreadMessages;
+    if (key === "calls") return missedCalls;
+    return 0;
+  };
+
   return (
     <motion.nav
       initial={{ y: 0 }}
@@ -63,6 +138,7 @@ const BottomNav = () => {
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           const Icon = tab.icon;
+          const badgeCount = getBadgeCount(tab.badgeKey);
           return (
             <button
               key={tab.path}
@@ -79,7 +155,17 @@ const BottomNav = () => {
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               )}
-              <Icon className="relative z-10 h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
+              <div className="relative">
+                <Icon className="relative z-10 h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                {badgeCount > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="absolute -top-2 -right-2.5 h-4 min-w-4 px-1 text-[10px] font-bold flex items-center justify-center z-20"
+                  >
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </Badge>
+                )}
+              </div>
               <span className="relative z-10 text-[10px] font-medium tracking-wide">{tab.label}</span>
             </button>
           );
