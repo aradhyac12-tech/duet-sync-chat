@@ -1,7 +1,7 @@
 import PageHeader from "@/components/PageHeader";
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
-import { ChevronLeft, Check, ImageIcon, X, Shield, Bell, Fingerprint, Vibrate, Link2, Unlink } from "lucide-react";
+import { ChevronLeft, Check, ImageIcon, X, Shield, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 const themes: { id: ThemeColor; name: string; preview: string; accent: string }[] = [
   { id: "soft-neutral", name: "Soft Neutral", preview: "bg-[hsl(30,25%,96%)]", accent: "bg-[hsl(28,15%,72%)]" },
@@ -33,7 +34,7 @@ const presetWallpapers = [
 ];
 
 const Settings = () => {
-  const { theme, setTheme, chatWallpaper, setChatWallpaper } = useTheme();
+  const { theme, setTheme, chatWallpaper, setChatWallpaper, appSettings, updateSetting } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -58,7 +59,6 @@ const Settings = () => {
 
   const linkPartner = async () => {
     if (!user || !partnerEmail.trim()) return;
-    // Find partner by email in profiles (display_name might be email)
     const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").neq("user_id", user.id);
     const partner = profiles?.find((p) => p.display_name === partnerEmail || p.user_id === partnerEmail);
     
@@ -67,7 +67,6 @@ const Settings = () => {
       return;
     }
 
-    // Link both profiles
     await supabase.from("profiles").update({ partner_id: partner.user_id }).eq("user_id", user.id);
     await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", partner.user_id);
     
@@ -85,6 +84,13 @@ const Settings = () => {
     setPartnerName("");
     toast({ title: "Unlinked" });
   };
+
+  const settingsItems = [
+    { key: "biometricLock" as const, icon: Fingerprint, label: "App Lock", desc: "Lock app when switching away. Tap to unlock." },
+    { key: "notifications" as const, icon: Bell, label: "Notifications", desc: "Push notifications for messages" },
+    { key: "hapticFeedback" as const, icon: Vibrate, label: "Haptic Feedback", desc: "Vibrate on interactions" },
+    { key: "privacyMode" as const, icon: EyeOff, label: "Privacy Screen", desc: "Blur app in task switcher & when looked at by others" },
+  ];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen pb-24">
@@ -186,17 +192,12 @@ const Settings = () => {
           )}
         </section>
 
-        {/* Device features */}
+        {/* Device & Privacy Features */}
         <section>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Device Features</h2>
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Privacy & Device</h2>
           <div className="space-y-1">
-            {[
-              { icon: Fingerprint, label: "Biometric Lock", desc: "Require fingerprint or Face ID" },
-              { icon: Bell, label: "Notifications", desc: "Push notifications for messages" },
-              { icon: Vibrate, label: "Haptic Feedback", desc: "Vibrate on interactions" },
-              { icon: Shield, label: "Privacy", desc: "Hide previews in app switcher" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-xl">
+            {settingsItems.map((item) => (
+              <div key={item.key} className="flex items-center gap-3 p-3 rounded-xl">
                 <div className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center shrink-0">
                   <item.icon className="h-4 w-4 text-foreground" />
                 </div>
@@ -204,12 +205,27 @@ const Settings = () => {
                   <p className="text-sm font-medium">{item.label}</p>
                   <p className="text-[11px] text-muted-foreground">{item.desc}</p>
                 </div>
-                <div className="h-6 w-10 rounded-full bg-muted relative cursor-pointer">
-                  <div className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-muted-foreground/40 transition-transform" />
-                </div>
+                <Switch
+                  checked={appSettings[item.key]}
+                  onCheckedChange={(val) => {
+                    updateSetting(item.key, val);
+                    toast({ title: `${item.label} ${val ? "enabled" : "disabled"}` });
+                  }}
+                />
               </div>
             ))}
           </div>
+
+          {/* Privacy info */}
+          {appSettings.privacyMode && (
+            <div className="mt-3 bg-primary/5 rounded-xl p-3 flex items-start gap-2">
+              <Shield className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-primary">Privacy Screen Active</p>
+                <p className="text-[11px] text-muted-foreground">App blurs when you switch apps or someone looks over your shoulder. Notifications show "New message" only.</p>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Account */}
@@ -229,8 +245,8 @@ const Settings = () => {
         <DialogContent className="rounded-2xl max-w-sm">
           <DialogHeader>
             <DialogTitle>Link with your partner</DialogTitle>
+            <DialogDescription>Enter your partner's name or email. They need to have an account first.</DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Enter your partner's name or email. They need to have an account first.</p>
           <Input value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)}
             placeholder="Partner's name or email" className="rounded-xl" />
           <DialogFooter>

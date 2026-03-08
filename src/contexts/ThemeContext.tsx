@@ -2,18 +2,40 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 
 export type ThemeColor = "soft-neutral" | "midnight" | "ocean" | "rose" | "forest" | "lavender";
 
+interface AppSettings {
+  biometricLock: boolean;
+  notifications: boolean;
+  hapticFeedback: boolean;
+  privacyMode: boolean;
+}
+
 interface ThemeContextType {
   theme: ThemeColor;
   setTheme: (theme: ThemeColor) => void;
   chatWallpaper: string | null;
   setChatWallpaper: (wp: string | null) => void;
+  appSettings: AppSettings;
+  updateSetting: (key: keyof AppSettings, value: boolean) => void;
+  isAppLocked: boolean;
+  setIsAppLocked: (locked: boolean) => void;
 }
+
+const defaultSettings: AppSettings = {
+  biometricLock: false,
+  notifications: true,
+  hapticFeedback: true,
+  privacyMode: false,
+};
 
 const ThemeContext = createContext<ThemeContextType>({
   theme: "soft-neutral",
   setTheme: () => {},
   chatWallpaper: null,
   setChatWallpaper: () => {},
+  appSettings: defaultSettings,
+  updateSetting: () => {},
+  isAppLocked: false,
+  setIsAppLocked: () => {},
 });
 
 export const useTheme = () => useContext(ThemeContext);
@@ -148,6 +170,11 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [chatWallpaper, setChatWallpaperState] = useState<string | null>(() => {
     return localStorage.getItem("duo-wallpaper") || null;
   });
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem("duo-settings");
+    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+  });
+  const [isAppLocked, setIsAppLocked] = useState(false);
 
   const setTheme = (t: ThemeColor) => {
     setThemeState(t);
@@ -160,6 +187,47 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     else localStorage.removeItem("duo-wallpaper");
   };
 
+  const updateSetting = (key: keyof AppSettings, value: boolean) => {
+    setAppSettings((prev) => {
+      const next = { ...prev, [key]: value };
+      localStorage.setItem("duo-settings", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Privacy mode: blur app when switching away
+  useEffect(() => {
+    if (!appSettings.privacyMode) return;
+    const handleBlur = () => {
+      document.body.style.filter = "blur(20px)";
+      document.body.style.transition = "filter 0.15s ease";
+    };
+    const handleFocus = () => {
+      document.body.style.filter = "";
+    };
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) handleBlur();
+      else handleFocus();
+    });
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      document.body.style.filter = "";
+    };
+  }, [appSettings.privacyMode]);
+
+  // App lock: lock when tab goes hidden (if biometric lock is on)
+  useEffect(() => {
+    if (!appSettings.biometricLock) return;
+    const handleHidden = () => {
+      if (document.hidden) setIsAppLocked(true);
+    };
+    document.addEventListener("visibilitychange", handleHidden);
+    return () => document.removeEventListener("visibilitychange", handleHidden);
+  }, [appSettings.biometricLock]);
+
   useEffect(() => {
     const root = document.documentElement;
     const styles = themeStyles[theme];
@@ -169,7 +237,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, chatWallpaper, setChatWallpaper }}>
+    <ThemeContext.Provider value={{ theme, setTheme, chatWallpaper, setChatWallpaper, appSettings, updateSetting, isAppLocked, setIsAppLocked }}>
       {children}
     </ThemeContext.Provider>
   );
