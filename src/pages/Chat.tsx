@@ -362,35 +362,64 @@ const Chat = () => {
         } : undefined}
       >
         <AnimatePresence>
-          {messages.map((msg) => (
+          {messages.map((msg) => {
+            const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
+            const isMine = msg.sender_id === user?.id;
+            return (
             <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className={`flex ${msg.sender_id === user?.id ? "justify-end" : "justify-start"}`}
+              className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
             >
-              <div className={`rounded-2xl px-4 py-2.5 max-w-[75%] ${
-                msg.sender_id === user?.id ? "bg-primary/20 rounded-br-md" : "bg-card rounded-bl-md shadow-sm border border-border"
-              }`}>
-                {msg.message_type === "voice" && msg.file_url && (
-                  <VoiceMessagePlayer src={msg.file_url} isMine={msg.sender_id === user?.id} />
+              <div className="flex items-start gap-1 max-w-[80%]">
+                {isMine && (
+                  <button
+                    onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                    className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0 mt-2"
+                  >
+                    <Reply className="h-3.5 w-3.5" />
+                  </button>
                 )}
-                {msg.message_type === "image" && msg.file_url && (
-                  <img src={msg.file_url} alt="shared" className="rounded-lg mb-2 max-h-48 object-cover w-full" />
+                <div className={`rounded-2xl px-4 py-2.5 ${
+                  isMine ? "bg-primary/20 rounded-br-md" : "bg-card rounded-bl-md shadow-sm border border-border"
+                }`}>
+                  {repliedMsg && (
+                    <QuotedMessage
+                      content={repliedMsg.decryptedContent || "Message"}
+                      senderName={repliedMsg.sender_id === user?.id ? "You" : "Partner"}
+                      isMine={isMine}
+                    />
+                  )}
+                  {msg.message_type === "voice" && msg.file_url && (
+                    <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
+                  )}
+                  {msg.message_type === "image" && msg.file_url && (
+                    <img src={msg.file_url} alt="shared" className="rounded-lg mb-2 max-h-48 object-cover w-full" />
+                  )}
+                  {msg.message_type === "file" && msg.file_name && (
+                    <a href={msg.file_url || "#"} target="_blank" rel="noopener"
+                      className="flex items-center gap-2 mb-1 bg-muted/50 rounded-lg px-3 py-2">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-xs truncate">{msg.file_name}</span>
+                    </a>
+                  )}
+                  {msg.message_type !== "voice" && msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
+                  <span className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5 ${isMine ? "justify-end" : ""}`}>
+                    {formatTime(msg.created_at)}
+                    <MessageStatus isRead={msg.is_read} isMine={isMine} />
+                  </span>
+                  <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
+                </div>
+                {!isMine && (
+                  <button
+                    onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                    className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0 mt-2"
+                  >
+                    <Reply className="h-3.5 w-3.5" />
+                  </button>
                 )}
-                {msg.message_type === "file" && msg.file_name && (
-                  <a href={msg.file_url || "#"} target="_blank" rel="noopener"
-                    className="flex items-center gap-2 mb-1 bg-muted/50 rounded-lg px-3 py-2">
-                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-xs truncate">{msg.file_name}</span>
-                  </a>
-                )}
-                {msg.message_type !== "voice" && msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
-                <span className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5 ${msg.sender_id === user?.id ? "justify-end" : ""}`}>
-                  {formatTime(msg.created_at)}
-                  <MessageStatus isRead={msg.is_read} isMine={msg.sender_id === user?.id} />
-                </span>
-                <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={msg.sender_id === user?.id} />
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </AnimatePresence>
 
         {messages.length === 0 && (
