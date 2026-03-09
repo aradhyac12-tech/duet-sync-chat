@@ -441,8 +441,14 @@ const Chat = () => {
       {/* Header */}
       <header className="safe-top px-4 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowGridMenu(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </button>
+            <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center overflow-hidden">
               {partnerAvatar ? (
                 <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -458,7 +464,7 @@ const Chat = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
               className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
@@ -466,26 +472,25 @@ const Chat = () => {
               <Search className="h-4 w-4" />
             </button>
             <button
+              onClick={() => { playCallSound(); navigate("/calls"); }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Phone className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => setDisappearMode(!disappearMode)}
               className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
                 disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
-              title={disappearMode ? "Disappearing messages ON" : "Disappearing messages OFF"}
             >
               {disappearMode ? <Timer className="h-4 w-4" /> : <TimerOff className="h-4 w-4" />}
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-xl min-w-[140px]">
-                <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive gap-2 text-sm">
-                  <Trash2 className="h-3.5 w-3.5" /> Clear chat
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              onClick={() => setShowClearDialog(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 
