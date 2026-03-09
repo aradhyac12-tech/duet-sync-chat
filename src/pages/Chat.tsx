@@ -394,6 +394,29 @@ const Chat = () => {
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Search logic
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setSearchIndex(0);
+      return;
+    }
+    const q = searchQuery.toLowerCase();
+    const results = messages
+      .filter(m => (m.decryptedContent && m.decryptedContent.toLowerCase().includes(q)) || (m.file_name && m.file_name.toLowerCase().includes(q)))
+      .map(m => m.id);
+    setSearchResults(results);
+    setSearchIndex(results.length > 0 ? results.length - 1 : 0);
+  }, [searchQuery, messages]);
+
+  // Scroll to active search result
+  useEffect(() => {
+    if (searchResults.length === 0) return;
+    const id = searchResults[searchIndex];
+    const el = document.getElementById(`msg-${id}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [searchIndex, searchResults]);
+
   // Group messages by date
   const groupedMessages: { date: string; msgs: DecryptedMessage[] }[] = [];
   messages.forEach(msg => {
