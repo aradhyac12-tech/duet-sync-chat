@@ -1,4 +1,4 @@
-import { Check, CheckCheck } from "lucide-react";
+import { CheckCheck } from "lucide-react";
 
 interface MessageStatusProps {
   isRead: boolean;
@@ -8,10 +8,10 @@ interface MessageStatusProps {
 const MessageStatus = ({ isRead, isMine }: MessageStatusProps) => {
   if (!isMine) return null;
 
-  return isRead ? (
-    <CheckCheck className="h-3.5 w-3.5 text-primary inline-block ml-1" />
-  ) : (
-    <CheckCheck className="h-3.5 w-3.5 text-muted-foreground inline-block ml-1" />
+  return (
+    <CheckCheck className={`h-3 w-3 inline-block ml-0.5 ${
+      isRead ? "text-background/70" : "text-background/40"
+    }`} />
   );
 };
 

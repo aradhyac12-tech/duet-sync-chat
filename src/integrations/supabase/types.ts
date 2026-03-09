@@ -137,6 +137,36 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_links: {
+        Row: {
+          code: string
+          created_at: string
+          creator_id: string
+          expires_at: string
+          id: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          creator_id: string
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          creator_id?: string
+          expires_at?: string
+          id?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: []
+      }
       locations: {
         Row: {
           id: string
@@ -369,6 +399,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_disappeared_messages: { Args: never; Returns: undefined }
       get_partner_id: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {

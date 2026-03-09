@@ -1,6 +1,5 @@
-import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Shield, Mic, Square, Play, Pause, Reply } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
@@ -30,13 +29,15 @@ interface Message {
   created_at: string;
   is_read: boolean;
   reply_to_id: string | null;
+  disappear_at: string | null;
 }
 
 interface DecryptedMessage extends Message {
   decryptedContent: string | null;
 }
 
-// Audio player component for voice messages
+const DISAPPEAR_DELAY_MS = 30000; // 30 seconds after read
+
 const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) => {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -62,28 +63,26 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (playing) { audio.pause(); } else { audio.play(); }
+    if (playing) audio.pause(); else audio.play();
     setPlaying(!playing);
   };
 
-  const formatDur = (s: number) => {
+  const fmt = (s: number) => {
     if (!s || !isFinite(s)) return "0:00";
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
+    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   };
 
   return (
-    <div className="flex items-center gap-2 min-w-[180px]">
+    <div className="flex items-center gap-2.5 min-w-[160px]">
       <audio ref={audioRef} src={src} preload="metadata" />
-      <button onClick={toggle} className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isMine ? "bg-primary/30" : "bg-accent"}`}>
-        {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 ml-0.5" />}
+      <button onClick={toggle} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center shrink-0 transition-colors hover:bg-accent">
+        {playing ? <Pause className="h-3.5 w-3.5 text-foreground" /> : <Play className="h-3.5 w-3.5 text-foreground ml-0.5" />}
       </button>
       <div className="flex-1 space-y-1">
-        <div className="h-1 bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-foreground/50 rounded-full transition-all" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
+        <div className="h-[3px] bg-border rounded-full overflow-hidden">
+          <div className="h-full bg-foreground/40 rounded-full transition-all" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
         </div>
-        <p className="text-[10px] text-muted-foreground">{formatDur(progress > 0 ? progress : duration)}</p>
+        <p className="text-[10px] text-muted-foreground">{fmt(progress > 0 ? progress : duration)}</p>
       </div>
     </div>
   );
@@ -95,7 +94,10 @@ const Chat = () => {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerName, setPartnerName] = useState("");
+  const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DecryptedMessage | null>(null);
+  const [disappearMode, setDisappearMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -121,30 +123,47 @@ const Chat = () => {
     );
   }, [decrypt]);
 
+  // Fetch partner info
   useEffect(() => {
     if (!user) return;
     const fetchPartner = async () => {
       const { data } = await supabase.from("profiles").select("partner_id").eq("user_id", user.id).single();
-      if (data?.partner_id) setPartnerId(data.partner_id);
+      if (data?.partner_id) {
+        setPartnerId(data.partner_id);
+        const { data: pp } = await supabase.from("profiles").select("display_name, avatar_url, pet_name").eq("user_id", data.partner_id).single();
+        if (pp) {
+          setPartnerName(pp.pet_name || pp.display_name || "Partner");
+          setPartnerAvatar(pp.avatar_url);
+        }
+      }
     };
     fetchPartner();
   }, [user]);
 
+  // Fetch messages
   useEffect(() => {
     if (!user || !partnerId) return;
     const fetchMessages = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("messages").select("*")
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
         .order("created_at", { ascending: true }).limit(200);
+      if (error) {
+        console.error("Failed to fetch messages:", error);
+        return;
+      }
       if (data) {
-        const decrypted = await decryptMessages(data);
+        // Filter out expired disappearing messages
+        const now = new Date();
+        const valid = (data as Message[]).filter(m => !m.disappear_at || new Date(m.disappear_at) > now);
+        const decrypted = await decryptMessages(valid);
         setMessages(decrypted);
       }
     };
     fetchMessages();
   }, [user, partnerId, decryptMessages]);
 
+  // Realtime
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -162,41 +181,77 @@ const Chat = () => {
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
             .order("created_at", { ascending: true }).limit(200)
             .then(async ({ data }) => {
-              if (data) { const decrypted = await decryptMessages(data); setMessages(decrypted); }
+              if (data) { const decrypted = await decryptMessages(data as Message[]); setMessages(decrypted); }
             });
         }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
         const updated = payload.new as Message;
-        setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, is_read: updated.is_read } : m));
+        setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...m, is_read: updated.is_read, disappear_at: updated.disappear_at } : m));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, partnerId, decrypt, decryptMessages]);
 
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Mark incoming messages as read
+  // Mark incoming messages as read + set disappear_at
   useEffect(() => {
     if (!user || !partnerId) return;
-    const unreadIds = messages
-      .filter((m) => m.sender_id === partnerId && !m.is_read)
-      .map((m) => m.id);
-    if (unreadIds.length === 0) return;
-    supabase
-      .from("messages")
-      .update({ is_read: true })
-      .in("id", unreadIds)
-      .then(() => {
-        setMessages((prev) =>
-          prev.map((m) => (unreadIds.includes(m.id) ? { ...m, is_read: true } : m))
-        );
-      });
+    const unread = messages.filter((m) => m.sender_id === partnerId && !m.is_read);
+    if (unread.length === 0) return;
+
+    const unreadIds = unread.map(m => m.id);
+    const disappearAt = new Date(Date.now() + DISAPPEAR_DELAY_MS).toISOString();
+
+    // For messages that have disappear mode, set disappear_at
+    const disappearingIds = unread.filter(m => m.disappear_at === "pending").map(m => m.id);
+    const normalIds = unreadIds.filter(id => !disappearingIds.includes(id));
+
+    const runUpdates = async () => {
+      if (normalIds.length > 0) {
+        await supabase.from("messages").update({ is_read: true }).in("id", normalIds);
+      }
+      if (disappearingIds.length > 0) {
+        await supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds);
+      }
+
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (unreadIds.includes(m.id)) {
+            return {
+              ...m,
+              is_read: true,
+              disappear_at: disappearingIds.includes(m.id) ? disappearAt : m.disappear_at,
+            };
+          }
+          return m;
+        })
+      );
+    };
+    runUpdates();
   }, [messages, user, partnerId]);
 
-  // Typing presence channel
+  // Client-side cleanup of expired disappearing messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setMessages(prev => {
+        const expired = prev.filter(m => m.disappear_at && m.disappear_at !== "pending" && new Date(m.disappear_at) <= now);
+        if (expired.length > 0) {
+          // Delete from DB
+          supabase.from("messages").delete().in("id", expired.map(m => m.id));
+        }
+        return prev.filter(m => !m.disappear_at || m.disappear_at === "pending" || new Date(m.disappear_at) > now);
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Typing presence
   useEffect(() => {
     if (!user || !partnerId) return;
     const channelName = [user.id, partnerId].sort().join("-");
@@ -228,9 +283,7 @@ const Chat = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4" });
       audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType });
@@ -247,14 +300,9 @@ const Chat = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
     setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
   };
 
   const cancelRecording = () => {
@@ -266,27 +314,27 @@ const Chat = () => {
     }
     audioChunksRef.current = [];
     setIsRecording(false);
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
   };
 
   const sendVoiceMessage = async (blob: Blob) => {
     if (!user || !partnerId) return;
     const ext = blob.type.includes("webm") ? "webm" : "m4a";
     const path = `${user.id}/${Date.now()}_voice.${ext}`;
-    const { data: uploadData } = await supabase.storage.from("chat-files").upload(path, blob, { contentType: blob.type });
+    const { data: uploadData, error: uploadError } = await supabase.storage.from("chat-files").upload(path, blob, { contentType: blob.type });
+    if (uploadError) { console.error("Upload failed:", uploadError); return; }
     if (!uploadData) return;
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
-    await supabase.from("messages").insert({
+    const { error } = await supabase.from("messages").insert({
       sender_id: user.id,
       receiver_id: partnerId,
       content: "🎤 Voice message",
       message_type: "voice",
       file_url: urlData.publicUrl,
       file_name: `voice.${ext}`,
+      disappear_at: disappearMode ? "pending" : null,
     });
+    if (error) console.error("Send voice failed:", error);
   };
 
   const handleSend = useCallback(async () => {
@@ -295,26 +343,38 @@ const Chat = () => {
     setMessage("");
     const currentReplyTo = replyTo;
     setReplyTo(null);
+
     const encryptedText = e2eReady ? await encrypt(text) : text;
-    await supabase.from("messages").insert({
-      sender_id: user.id, receiver_id: partnerId, content: encryptedText, message_type: "text",
-      ...(currentReplyTo ? { reply_to_id: currentReplyTo.id } : {}),
-    } as any);
-  }, [message, user, partnerId, encrypt, e2eReady, replyTo]);
+    const { error } = await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: partnerId,
+      content: encryptedText,
+      message_type: "text",
+      reply_to_id: currentReplyTo?.id || null,
+      disappear_at: disappearMode ? "pending" : null,
+    });
+    if (error) console.error("Send message failed:", error);
+  }, [message, user, partnerId, encrypt, e2eReady, replyTo, disappearMode]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
     const file = e.target.files?.[0];
     if (!file || !user || !partnerId) return;
     setShowAttach(false);
     const path = `${user.id}/${Date.now()}_${file.name}`;
-    const { data: uploadData } = await supabase.storage.from("chat-files").upload(path, file);
+    const { data: uploadData, error: uploadError } = await supabase.storage.from("chat-files").upload(path, file);
+    if (uploadError) { console.error("Upload failed:", uploadError); return; }
     if (!uploadData) return;
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
-    await supabase.from("messages").insert({
-      sender_id: user.id, receiver_id: partnerId,
+    const { error } = await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: partnerId,
       content: type === "image" ? "📷 Photo" : `📎 ${file.name}`,
-      message_type: type, file_url: urlData.publicUrl, file_name: file.name,
+      message_type: type,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      disappear_at: disappearMode ? "pending" : null,
     });
+    if (error) console.error("Send file failed:", error);
     e.target.value = "";
   };
 
@@ -329,180 +389,277 @@ const Chat = () => {
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Group messages by date
+  const groupedMessages: { date: string; msgs: DecryptedMessage[] }[] = [];
+  messages.forEach(msg => {
+    const date = new Date(msg.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const last = groupedMessages[groupedMessages.length - 1];
+    if (last?.date === date) {
+      last.msgs.push(msg);
+    } else {
+      groupedMessages.push({ date, msgs: [msg] });
+    }
+  });
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen">
-      <PageHeader title="Chat" subtitle={partnerId ? (e2eReady ? "🔒 End-to-end encrypted" : "Connected") : "Set a partner in settings"}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">
-              <MoreVertical className="h-4 w-4 text-foreground" />
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="safe-top px-4 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+              {partnerAvatar ? (
+                <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-sm">💕</span>
+              )}
+            </div>
+            <div>
+              <h1 className="text-[15px] font-semibold tracking-tight text-foreground leading-tight">
+                {partnerId ? partnerName : "DuoSpace"}
+              </h1>
+              <p className="text-[11px] text-muted-foreground leading-tight">
+                {partnerTyping ? "typing..." : e2eReady ? "encrypted" : partnerId ? "connected" : "Link a partner to chat"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDisappearMode(!disappearMode)}
+              className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
+                disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
+              }`}
+              title={disappearMode ? "Disappearing messages ON" : "Disappearing messages OFF"}
+            >
+              {disappearMode ? <Timer className="h-4 w-4" /> : <TimerOff className="h-4 w-4" />}
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="rounded-xl">
-            <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive gap-2">
-              <Trash2 className="h-4 w-4" /> Clear chat
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PageHeader>
-
-      {e2eReady && (
-        <div className="px-5 py-1.5 flex items-center justify-center gap-1.5 bg-primary/5">
-          <Shield className="h-3 w-3 text-primary" />
-          <span className="text-[10px] text-primary font-medium">Messages are end-to-end encrypted</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl min-w-[140px]">
+                <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive gap-2 text-sm">
+                  <Trash2 className="h-3.5 w-3.5" /> Clear chat
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      )}
+      </header>
 
+      {/* Disappearing mode banner */}
+      <AnimatePresence>
+        {disappearMode && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 py-1.5 bg-primary/5 flex items-center justify-center gap-1.5">
+              <Timer className="h-3 w-3 text-primary" />
+              <span className="text-[10px] text-primary font-medium">Messages will disappear 30s after being read</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Messages */}
       <div
-        className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
+        className="flex-1 overflow-y-auto px-4 py-3"
         style={chatWallpaper ? {
           backgroundImage: chatWallpaper.startsWith("url(") ? chatWallpaper : undefined,
           background: chatWallpaper.startsWith("linear") ? chatWallpaper : undefined,
           backgroundSize: "cover", backgroundPosition: "center",
         } : undefined}
       >
-        <AnimatePresence>
-          {messages.map((msg) => {
-            const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
-            const isMine = msg.sender_id === user?.id;
-            return (
-            <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
-            >
-              <div className="flex items-start gap-1 max-w-[80%]">
-                {isMine && (
-                  <button
-                    onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                    className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0 mt-2"
+        {groupedMessages.map((group) => (
+          <div key={group.date}>
+            <div className="flex justify-center my-3">
+              <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">
+                {group.date}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {group.msgs.map((msg) => {
+                const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
+                const isMine = msg.sender_id === user?.id;
+                const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
                   >
-                    <Reply className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <div className={`rounded-2xl px-4 py-2.5 ${
-                  isMine ? "bg-primary/20 rounded-br-md" : "bg-card rounded-bl-md shadow-sm border border-border"
-                }`}>
-                  {repliedMsg && (
-                    <QuotedMessage
-                      content={repliedMsg.decryptedContent || "Message"}
-                      senderName={repliedMsg.sender_id === user?.id ? "You" : "Partner"}
-                      isMine={isMine}
-                    />
-                  )}
-                  {msg.message_type === "voice" && msg.file_url && (
-                    <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
-                  )}
-                  {msg.message_type === "image" && msg.file_url && (
-                    <img src={msg.file_url} alt="shared" className="rounded-lg mb-2 max-h-48 object-cover w-full" />
-                  )}
-                  {msg.message_type === "file" && msg.file_name && (
-                    <a href={msg.file_url || "#"} target="_blank" rel="noopener"
-                      className="flex items-center gap-2 mb-1 bg-muted/50 rounded-lg px-3 py-2">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-xs truncate">{msg.file_name}</span>
-                    </a>
-                  )}
-                  {msg.message_type !== "voice" && msg.decryptedContent && <p className="text-sm">{msg.decryptedContent}</p>}
-                  <span className={`text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5 ${isMine ? "justify-end" : ""}`}>
-                    {formatTime(msg.created_at)}
-                    <MessageStatus isRead={msg.is_read} isMine={isMine} />
-                  </span>
-                  <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
-                </div>
-                {!isMine && (
-                  <button
-                    onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                    className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0 mt-2"
-                  >
-                    <Reply className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </motion.div>
-            );
-          })}
-        </AnimatePresence>
+                    <div className="flex items-end gap-1 max-w-[78%]">
+                      {isMine && (
+                        <button
+                          onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1"
+                        >
+                          <Reply className="h-3 w-3" />
+                        </button>
+                      )}
+                      <div className={`rounded-[18px] px-3.5 py-2 ${
+                        isMine
+                          ? "bg-foreground text-background rounded-br-[6px]"
+                          : "bg-card border border-border/60 rounded-bl-[6px]"
+                      } ${isDisappearing ? "ring-1 ring-primary/30" : ""}`}>
+                        {repliedMsg && (
+                          <QuotedMessage
+                            content={repliedMsg.decryptedContent || "Message"}
+                            senderName={repliedMsg.sender_id === user?.id ? "You" : partnerName}
+                            isMine={isMine}
+                          />
+                        )}
+                        {msg.message_type === "voice" && msg.file_url && (
+                          <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
+                        )}
+                        {msg.message_type === "image" && msg.file_url && (
+                          <img src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full" />
+                        )}
+                        {msg.message_type === "file" && msg.file_name && (
+                          <a href={msg.file_url || "#"} target="_blank" rel="noopener"
+                            className={`flex items-center gap-2 mb-1 rounded-lg px-2.5 py-1.5 ${isMine ? "bg-background/10" : "bg-muted/50"}`}>
+                            <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                            <span className="text-xs truncate">{msg.file_name}</span>
+                          </a>
+                        )}
+                        {msg.message_type !== "voice" && msg.decryptedContent && (
+                          <p className="text-[14px] leading-relaxed">{msg.decryptedContent}</p>
+                        )}
+                        <div className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end" : ""}`}>
+                          {isDisappearing && <Timer className="h-2.5 w-2.5 opacity-40" />}
+                          <span className={`text-[10px] ${isMine ? "text-background/50" : "text-muted-foreground"}`}>
+                            {formatTime(msg.created_at)}
+                          </span>
+                          {isMine && <MessageStatus isRead={msg.is_read} isMine={isMine} />}
+                        </div>
+                        <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
+                      </div>
+                      {!isMine && (
+                        <button
+                          onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1"
+                        >
+                          <Reply className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
 
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">{partnerId ? "No messages yet. Say hi! 👋" : "Link with your partner to start chatting"}</p>
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <div className="h-16 w-16 rounded-full bg-accent/50 flex items-center justify-center">
+              <span className="text-2xl">💬</span>
+            </div>
+            <p className="text-sm text-muted-foreground text-center max-w-[200px]">
+              {partnerId ? "Start your conversation" : "Link with your partner in settings"}
+            </p>
           </div>
         )}
+
         <AnimatePresence>
           {partnerTyping && <TypingIndicator />}
         </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Attach menu */}
       <AnimatePresence>
         {showAttach && !isRecording && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="px-4 pb-2 flex gap-2">
-            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
-              <ImageIcon className="h-4 w-4 text-muted-foreground" /> Photo
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className="px-4 pb-1.5 flex gap-2"
+          >
+            <button onClick={() => imageInputRef.current?.click()}
+              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+              <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> Photo
             </button>
-            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
-              <Camera className="h-4 w-4 text-muted-foreground" /> Camera
+            <button onClick={() => imageInputRef.current?.click()}
+              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+              <Camera className="h-3.5 w-3.5 text-muted-foreground" /> Camera
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-xl border border-border px-4 py-2.5 text-sm active:scale-[0.97] transition-transform">
-              <FileText className="h-4 w-4 text-muted-foreground" /> File
+            <button onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" /> File
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Reply preview */}
       <AnimatePresence>
         {replyTo && (
           <ReplyPreview
             replyToContent={replyTo.decryptedContent || "Message"}
-            replyToSenderName={replyTo.sender_id === user?.id ? "You" : "Partner"}
+            replyToSenderName={replyTo.sender_id === user?.id ? "You" : partnerName}
             onCancel={() => setReplyTo(null)}
           />
         )}
       </AnimatePresence>
 
-      <div className="px-4 pb-20 pt-2">
+      {/* Input area */}
+      <div className="px-3 pb-20 pt-1.5">
         {isRecording ? (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-3 bg-destructive/10 rounded-2xl border border-destructive/20 px-4 py-3"
+            className="flex items-center gap-3 bg-destructive/8 rounded-full border border-destructive/15 px-4 py-2.5"
           >
-            <motion.div
-              animate={{ opacity: [1, 0.3, 1] }}
-              transition={{ repeat: Infinity, duration: 1 }}
-              className="h-3 w-3 rounded-full bg-destructive shrink-0"
-            />
-            <span className="text-sm font-medium text-destructive flex-1">
-              Recording {formatRecTime(recordingTime)}
-            </span>
-            <button onClick={cancelRecording} className="h-9 w-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
-              <Trash2 className="h-4 w-4 text-muted-foreground" />
+            <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1 }}
+              className="h-2.5 w-2.5 rounded-full bg-destructive shrink-0" />
+            <span className="text-sm font-medium text-destructive flex-1">{formatRecTime(recordingTime)}</span>
+            <button onClick={cancelRecording} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
-            <button onClick={stopRecording} className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center shrink-0">
-              <Send className="h-4 w-4 text-background" />
+            <button onClick={stopRecording} className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center">
+              <Send className="h-3.5 w-3.5 text-background" />
             </button>
           </motion.div>
         ) : (
-          <div className="flex items-center gap-2 bg-card rounded-2xl border border-border px-3 py-2 shadow-sm">
-            <button onClick={() => setShowAttach(!showAttach)} className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+          <div className="flex items-center gap-1.5 bg-card/80 backdrop-blur-sm rounded-full border border-border/50 px-2 py-1.5 shadow-sm">
+            <button onClick={() => setShowAttach(!showAttach)}
+              className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
               <Paperclip className="h-4 w-4" />
             </button>
-            <input ref={inputRef} type="text" value={message} onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder={replyTo ? "Reply..." : "Type a message..."}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={message}
+              onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder={replyTo ? "Reply..." : "Message"}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1"
+            />
             {message.trim() ? (
-              <button onClick={handleSend} className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center shrink-0 transition-transform active:scale-95">
-                <Send className="h-4 w-4 text-background" />
-              </button>
+              <motion.button
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                onClick={handleSend}
+                className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center shrink-0"
+              >
+                <Send className="h-3.5 w-3.5 text-background" />
+              </motion.button>
             ) : (
               <button
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
+                onTouchStart={startRecording} onTouchEnd={stopRecording}
+                onMouseDown={startRecording} onMouseUp={stopRecording}
                 onMouseLeave={() => { if (isRecording) cancelRecording(); }}
-                className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center shrink-0 transition-transform active:scale-95"
+                className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform"
               >
-                <Mic className="h-4 w-4 text-background" />
+                <Mic className="h-3.5 w-3.5 text-background" />
               </button>
             )}
           </div>
@@ -513,18 +670,18 @@ const Chat = () => {
       <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => handleFileSelect(e, "file")} />
 
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent className="rounded-2xl max-w-[320px]">
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
-            <AlertDialogDescription>This will remove all messages. This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogTitle className="text-base">Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">All messages will be permanently deleted.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={clearChat} className="rounded-xl bg-destructive text-destructive-foreground">Clear</AlertDialogAction>
+            <AlertDialogCancel className="rounded-full text-sm h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={clearChat} className="rounded-full bg-destructive text-destructive-foreground text-sm h-9">Clear</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+    </div>
   );
 };
 
