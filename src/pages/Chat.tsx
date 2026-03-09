@@ -97,11 +97,14 @@ const Chat = () => {
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [showGridMenu, setShowGridMenu] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
   const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DecryptedMessage | null>(null);
   const [disappearMode, setDisappearMode] = useState(false);
+  const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<string[]>([]);
