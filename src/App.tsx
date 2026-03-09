@@ -27,31 +27,46 @@ const ProtectedRoutes = () => {
   const { user, loading } = useAuth();
   const { isAppLocked } = useTheme();
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
-  usePushNotifications(); // Initialize push notifications for native platforms
+  usePushNotifications();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setNeedsOnboarding(null);
+      return;
+    }
     const checkProfile = async () => {
       const { data } = await supabase
         .from("profiles")
         .select("gender, display_name")
         .eq("user_id", user.id)
         .single();
-      // If gender is not set, they haven't completed onboarding
       setNeedsOnboarding(!data?.gender);
     };
     checkProfile();
   }, [user]);
 
-  if (loading || needsOnboarding === null) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground animate-pulse-soft font-serif text-lg">DuoSpace</p>
+        <div className="text-center space-y-3">
+          <div className="h-10 w-10 rounded-full bg-muted mx-auto flex items-center justify-center">
+            <span className="text-lg">💕</span>
+          </div>
+          <p className="text-xs text-muted-foreground animate-pulse">Loading...</p>
+        </div>
       </div>
     );
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  if (needsOnboarding === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-xs text-muted-foreground animate-pulse">Setting up...</p>
+      </div>
+    );
+  }
 
   if (needsOnboarding) {
     return <Onboarding onComplete={() => setNeedsOnboarding(false)} />;
@@ -79,6 +94,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route path="/index" element={<Navigate to="/chat" replace />} />
             <Route element={<ProtectedRoutes />}>
               <Route path="/chat" element={<Chat />} />
               <Route path="/gallery" element={<Gallery />} />
