@@ -437,7 +437,7 @@ const Chat = () => {
             <button onClick={() => setShowAttach(!showAttach)} className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
               <Paperclip className="h-4 w-4" />
             </button>
-            <input type="text" value={message} onChange={(e) => setMessage(e.target.value)}
+            <input type="text" value={message} onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
               onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Type a message..."
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             {message.trim() ? (
