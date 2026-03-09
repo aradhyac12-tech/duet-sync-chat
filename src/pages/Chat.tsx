@@ -560,15 +560,18 @@ const Chat = () => {
             <div className="space-y-1">
               {group.msgs.map((msg) => {
                 const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
+                const isHighlighted = searchResults.includes(msg.id);
+                const isActiveResult = searchResults[searchIndex] === msg.id;
                 const isMine = msg.sender_id === user?.id;
                 const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
                 return (
                   <motion.div
                     key={msg.id}
+                    id={`msg-${msg.id}`}
                     initial={{ opacity: 0, y: 6, scale: 0.98 }}
                     animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"} group ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}
                   >
                     <div className="flex items-end gap-1 max-w-[78%]">
                       {isMine && (
