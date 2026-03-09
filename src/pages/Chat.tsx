@@ -219,7 +219,6 @@ const Chat = () => {
         await supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds);
       }
 
-    Promise.all(updates).then(() => {
       setMessages((prev) =>
         prev.map((m) => {
           if (unreadIds.includes(m.id)) {
@@ -232,7 +231,8 @@ const Chat = () => {
           return m;
         })
       );
-    });
+    };
+    runUpdates();
   }, [messages, user, partnerId]);
 
   // Client-side cleanup of expired disappearing messages
