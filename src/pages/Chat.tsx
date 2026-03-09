@@ -29,6 +29,7 @@ interface Message {
   file_name: string | null;
   created_at: string;
   is_read: boolean;
+  reply_to_id: string | null;
 }
 
 interface DecryptedMessage extends Message {
