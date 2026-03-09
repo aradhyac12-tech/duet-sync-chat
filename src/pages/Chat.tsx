@@ -108,6 +108,7 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
 const Chat = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
+  const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [showGridMenu, setShowGridMenu] = useState(false);
