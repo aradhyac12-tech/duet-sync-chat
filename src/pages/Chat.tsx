@@ -449,6 +449,16 @@ const Chat = () => {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {replyTo && (
+          <ReplyPreview
+            replyToContent={replyTo.decryptedContent || "Message"}
+            replyToSenderName={replyTo.sender_id === user?.id ? "You" : "Partner"}
+            onCancel={() => setReplyTo(null)}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="px-4 pb-20 pt-2">
         {isRecording ? (
           <motion.div
