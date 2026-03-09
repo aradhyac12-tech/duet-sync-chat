@@ -293,11 +293,14 @@ const Chat = () => {
     if (!message.trim() || !user || !partnerId) return;
     const text = message;
     setMessage("");
+    const currentReplyTo = replyTo;
+    setReplyTo(null);
     const encryptedText = e2eReady ? await encrypt(text) : text;
     await supabase.from("messages").insert({
       sender_id: user.id, receiver_id: partnerId, content: encryptedText, message_type: "text",
-    });
-  }, [message, user, partnerId, encrypt, e2eReady]);
+      ...(currentReplyTo ? { reply_to_id: currentReplyTo.id } : {}),
+    } as any);
+  }, [message, user, partnerId, encrypt, e2eReady, replyTo]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "file") => {
     const file = e.target.files?.[0];
