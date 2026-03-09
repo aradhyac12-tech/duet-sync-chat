@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, Camera, Mic, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown, Phone, Menu } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, Camera, Mic, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown, Phone, Video, MoreVertical, LayoutGrid, MicOff, VideoOff, PhoneOff, Monitor, MonitorOff, Wifi } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
@@ -15,6 +15,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { playMessageSound, playCallSound } from "@/lib/sounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useE2E } from "@/hooks/useE2E";
+import { useDailyCall } from "@/hooks/useDailyCall";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -53,7 +58,15 @@ type TimelineItem =
   | { type: "message"; data: DecryptedMessage }
   | { type: "call"; data: CallEntry };
 
-const DISAPPEAR_DELAY_MS = 30000; // 30 seconds after read
+const DISAPPEAR_DELAY_MS = 30000;
+
+const formatCallDuration = (seconds: number) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
 
 const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) => {
   const [playing, setPlaying] = useState(false);
@@ -139,6 +152,18 @@ const Chat = () => {
   const { chatWallpaper } = useTheme();
   const { user } = useAuth();
   const { ready: e2eReady, encrypt, decrypt } = useE2E(user?.id, partnerId);
+  const { toast } = useToast();
+
+  // Daily.co call state
+  const [isStartingCall, setIsStartingCall] = useState(false);
+  const [currentCallId, setCurrentCallId] = useState<string | null>(null);
+  const {
+    joinCall, leaveCall, toggleAudio, toggleVideo, toggleScreenShare,
+    isAudioOn, isVideoOn, isScreenSharing, callState,
+    localVideoRef, remoteVideoRef, screenShareRef,
+    networkQuality: callNetworkQuality, participantCount, error: callError,
+    callDuration,
+  } = useDailyCall();
 
   const decryptMessages = useCallback(async (msgs: Message[]): Promise<DecryptedMessage[]> => {
     return Promise.all(
@@ -174,12 +199,8 @@ const Chat = () => {
         .from("messages").select("*")
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
         .order("created_at", { ascending: true }).limit(200);
-      if (error) {
-        console.error("Failed to fetch messages:", error);
-        return;
-      }
+      if (error) { console.error("Failed to fetch messages:", error); return; }
       if (data) {
-        // Filter out expired disappearing messages
         const now = new Date();
         const valid = (data as Message[]).filter(m => !m.disappear_at || new Date(m.disappear_at) > now);
         const decrypted = await decryptMessages(valid);
@@ -189,7 +210,7 @@ const Chat = () => {
     fetchMessages();
   }, [user, partnerId, decryptMessages]);
 
-  // Fetch call history between partners
+  // Fetch call history
   useEffect(() => {
     if (!user || !partnerId) return;
     const fetchCalls = async () => {
@@ -200,7 +221,6 @@ const Chat = () => {
       if (data) setCallHistory(data as CallEntry[]);
     };
     fetchCalls();
-
     const channel = supabase
       .channel("call-history-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "call_history" }, () => fetchCalls())
@@ -208,7 +228,7 @@ const Chat = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user, partnerId]);
 
-  // Realtime
+  // Realtime messages
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -244,35 +264,22 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Mark incoming messages as read + set disappear_at
+  // Mark incoming messages as read
   useEffect(() => {
     if (!user || !partnerId) return;
     const unread = messages.filter((m) => m.sender_id === partnerId && !m.is_read);
     if (unread.length === 0) return;
-
     const unreadIds = unread.map(m => m.id);
     const disappearAt = new Date(Date.now() + DISAPPEAR_DELAY_MS).toISOString();
-
-    // For messages that have disappear mode, set disappear_at
     const disappearingIds = unread.filter(m => m.disappear_at === "pending").map(m => m.id);
     const normalIds = unreadIds.filter(id => !disappearingIds.includes(id));
-
     const runUpdates = async () => {
-      if (normalIds.length > 0) {
-        await supabase.from("messages").update({ is_read: true }).in("id", normalIds);
-      }
-      if (disappearingIds.length > 0) {
-        await supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds);
-      }
-
+      if (normalIds.length > 0) await supabase.from("messages").update({ is_read: true }).in("id", normalIds);
+      if (disappearingIds.length > 0) await supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds);
       setMessages((prev) =>
         prev.map((m) => {
           if (unreadIds.includes(m.id)) {
-            return {
-              ...m,
-              is_read: true,
-              disappear_at: disappearingIds.includes(m.id) ? disappearAt : m.disappear_at,
-            };
+            return { ...m, is_read: true, disappear_at: disappearingIds.includes(m.id) ? disappearAt : m.disappear_at };
           }
           return m;
         })
@@ -281,16 +288,13 @@ const Chat = () => {
     runUpdates();
   }, [messages, user, partnerId]);
 
-  // Client-side cleanup of expired disappearing messages
+  // Cleanup expired disappearing messages
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
       setMessages(prev => {
         const expired = prev.filter(m => m.disappear_at && m.disappear_at !== "pending" && new Date(m.disappear_at) <= now);
-        if (expired.length > 0) {
-          // Delete from DB
-          supabase.from("messages").delete().in("id", expired.map(m => m.id));
-        }
+        if (expired.length > 0) supabase.from("messages").delete().in("id", expired.map(m => m.id));
         return prev.filter(m => !m.disappear_at || m.disappear_at === "pending" || new Date(m.disappear_at) > now);
       });
     }, 5000);
@@ -372,12 +376,8 @@ const Chat = () => {
     if (!uploadData) return;
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
     const { error } = await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: partnerId,
-      content: "🎤 Voice message",
-      message_type: "voice",
-      file_url: urlData.publicUrl,
-      file_name: `voice.${ext}`,
+      sender_id: user.id, receiver_id: partnerId, content: "🎤 Voice message",
+      message_type: "voice", file_url: urlData.publicUrl, file_name: `voice.${ext}`,
       disappear_at: disappearMode ? "pending" : null,
     });
     if (error) console.error("Send voice failed:", error);
@@ -389,14 +389,10 @@ const Chat = () => {
     setMessage("");
     const currentReplyTo = replyTo;
     setReplyTo(null);
-
     const encryptedText = e2eReady ? await encrypt(text) : text;
     const { error } = await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: partnerId,
-      content: encryptedText,
-      message_type: "text",
-      reply_to_id: currentReplyTo?.id || null,
+      sender_id: user.id, receiver_id: partnerId, content: encryptedText,
+      message_type: "text", reply_to_id: currentReplyTo?.id || null,
       disappear_at: disappearMode ? "pending" : null,
     });
     if (error) console.error("Send message failed:", error);
@@ -412,12 +408,9 @@ const Chat = () => {
     if (!uploadData) return;
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
     const { error } = await supabase.from("messages").insert({
-      sender_id: user.id,
-      receiver_id: partnerId,
+      sender_id: user.id, receiver_id: partnerId,
       content: type === "image" ? "📷 Photo" : `📎 ${file.name}`,
-      message_type: type,
-      file_url: urlData.publicUrl,
-      file_name: file.name,
+      message_type: type, file_url: urlData.publicUrl, file_name: file.name,
       disappear_at: disappearMode ? "pending" : null,
     });
     if (error) console.error("Send file failed:", error);
@@ -432,16 +425,61 @@ const Chat = () => {
     setShowClearDialog(false);
   };
 
+  // === Daily.co calling ===
+  const startCall = async (mode: "video" | "voice") => {
+    if (!user || !partnerId) return;
+    setIsStartingCall(true);
+    try {
+      // Request permissions
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === "video" });
+      stream.getTracks().forEach(t => t.stop());
+
+      playCallSound();
+
+      const { data, error: fnError } = await supabase.functions.invoke("daily-call", {
+        body: { action: "create-room", roomName: `duo-${user.id.slice(0, 8)}-${Date.now()}` },
+      });
+      if (fnError || data?.error) throw new Error(data?.error || fnError?.message || "Failed to create room");
+
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke("daily-call", {
+        body: { action: "get-token", roomName: data.name },
+      });
+      if (tokenError || tokenData?.error) throw new Error(tokenData?.error || tokenError?.message || "Failed to get token");
+
+      const { data: callRecord } = await supabase.from("call_history").insert({
+        caller_id: user.id, receiver_id: partnerId, call_type: mode,
+        call_direction: "outgoing", status: "in_progress", room_name: data.name,
+        started_at: new Date().toISOString(),
+      } as any).select().single();
+      if (callRecord) setCurrentCallId((callRecord as any).id);
+
+      await joinCall(data.url, tokenData.token);
+      if (mode === "voice") toggleVideo();
+      toast({ title: mode === "video" ? "Video call started 📹" : "Voice call started 📞" });
+    } catch (err: any) {
+      console.error("Start call error:", err);
+      toast({ title: "Call failed", description: err.message, variant: "destructive" });
+    }
+    setIsStartingCall(false);
+  };
+
+  const endCall = async () => {
+    if (currentCallId && user) {
+      await supabase.from("call_history").update({
+        status: "completed", duration_seconds: callDuration, ended_at: new Date().toISOString(),
+      } as any).eq("id", currentCallId);
+      setCurrentCallId(null);
+    }
+    leaveCall();
+    toast({ title: "Call ended" });
+  };
+
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   // Search logic
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setSearchIndex(0);
-      return;
-    }
+    if (!searchQuery.trim()) { setSearchResults([]); setSearchIndex(0); return; }
     const q = searchQuery.toLowerCase();
     const results = messages
       .filter(m => (m.decryptedContent && m.decryptedContent.toLowerCase().includes(q)) || (m.file_name && m.file_name.toLowerCase().includes(q)))
@@ -450,7 +488,6 @@ const Chat = () => {
     setSearchIndex(results.length > 0 ? results.length - 1 : 0);
   }, [searchQuery, messages]);
 
-  // Scroll to active search result
   useEffect(() => {
     if (searchResults.length === 0) return;
     const id = searchResults[searchIndex];
@@ -458,7 +495,7 @@ const Chat = () => {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [searchIndex, searchResults]);
 
-  // Merge messages and calls into timeline, grouped by date
+  // Timeline
   const timeline: TimelineItem[] = [
     ...messages.map(m => ({ type: "message" as const, data: m })),
     ...callHistory.map(c => ({ type: "call" as const, data: c })),
@@ -468,26 +505,96 @@ const Chat = () => {
   timeline.forEach(item => {
     const date = new Date(item.data.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     const last = groupedTimeline[groupedTimeline.length - 1];
-    if (last?.date === date) {
-      last.items.push(item);
-    } else {
-      groupedTimeline.push({ date, items: [item] });
-    }
+    if (last?.date === date) last.items.push(item);
+    else groupedTimeline.push({ date, items: [item] });
   });
+
+  // === In-call fullscreen overlay ===
+  if (callState === "joined" || callState === "joining") {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-foreground relative">
+        <video ref={remoteVideoRef} autoPlay playsInline
+          className={`absolute inset-0 w-full h-full object-cover ${isScreenSharing ? "hidden" : ""}`} />
+        <video ref={screenShareRef} autoPlay playsInline
+          className="absolute inset-0 w-full h-full object-contain bg-black" style={{ display: "none" }} />
+
+        {participantCount <= 1 && callState === "joined" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-background/80">
+              <div className="h-20 w-20 rounded-full bg-background/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <Phone className="h-8 w-8" />
+              </div>
+              <p className="text-lg font-semibold">Calling {partnerName}...</p>
+              <p className="text-sm opacity-60 mt-1">Waiting for answer</p>
+            </div>
+          </div>
+        )}
+
+        {callState === "joining" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-foreground">
+            <p className="text-lg font-semibold animate-pulse text-background/80">Connecting...</p>
+          </div>
+        )}
+
+        <motion.div drag dragMomentum={false} dragElastic={0.1}
+          className="absolute top-14 right-4 w-28 h-40 rounded-2xl overflow-hidden shadow-lg border-2 border-background/20 z-10 cursor-grab active:cursor-grabbing">
+          <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          {!isVideoOn && (
+            <div className="absolute inset-0 bg-foreground/80 flex items-center justify-center">
+              <VideoOff className="h-6 w-6 text-background/60" />
+            </div>
+          )}
+        </motion.div>
+
+        <div className="absolute top-4 left-4 right-16 z-10 flex items-center gap-2">
+          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2">
+            <Wifi className="h-3.5 w-3.5 text-background" />
+            <span className="text-xs text-background font-medium">{callNetworkQuality}</span>
+          </div>
+          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5">
+            <span className="text-xs text-background font-medium font-mono">{formatCallDuration(callDuration)}</span>
+          </div>
+          {isScreenSharing && (
+            <div className="bg-primary/80 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5">
+              <Monitor className="h-3 w-3 text-background" />
+              <span className="text-[10px] text-background font-medium">Sharing</span>
+            </div>
+          )}
+        </div>
+
+        <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={toggleAudio}
+              className={`rounded-full flex items-center justify-center transition-colors ${isAudioOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
+              style={{ width: 52, height: 52 }}>
+              {isAudioOn ? <Mic className="h-5 w-5 text-background" /> : <MicOff className="h-5 w-5 text-background" />}
+            </button>
+            <button onClick={toggleVideo}
+              className={`rounded-full flex items-center justify-center transition-colors ${isVideoOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
+              style={{ width: 52, height: 52 }}>
+              {isVideoOn ? <Video className="h-5 w-5 text-background" /> : <VideoOff className="h-5 w-5 text-background" />}
+            </button>
+            <button onClick={toggleScreenShare}
+              className={`rounded-full flex items-center justify-center transition-colors ${isScreenSharing ? "bg-primary" : "bg-background/20 backdrop-blur-md"}`}
+              style={{ width: 52, height: 52 }}>
+              {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" /> : <Monitor className="h-5 w-5 text-background" />}
+            </button>
+            <button onClick={endCall} className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
+              <PhoneOff className="h-7 w-7 text-background" />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
-      <header className="safe-top px-4 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
+      {/* Header - WhatsApp style */}
+      <header className="safe-top px-3 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => setShowGridMenu(true)}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Menu className="h-4.5 w-4.5" />
-            </button>
-            <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+            <div className="h-9 w-9 rounded-full bg-accent flex items-center justify-center overflow-hidden">
               {partnerAvatar ? (
                 <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -504,71 +611,66 @@ const Chat = () => {
             </div>
           </div>
           <div className="flex items-center gap-0.5">
+            {/* Video call */}
             <button
-              onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => startCall("video")}
+              disabled={isStartingCall || !partnerId}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
-              <Search className="h-4 w-4" />
+              <Video className="h-4.5 w-4.5" />
             </button>
+            {/* Voice call */}
             <button
-              onClick={() => { playCallSound(); navigate("/calls"); }}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => startCall("voice")}
+              disabled={isStartingCall || !partnerId}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
               <Phone className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => setDisappearMode(!disappearMode)}
-              className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
-                disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {disappearMode ? <Timer className="h-4 w-4" /> : <TimerOff className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => setShowClearDialog(true)}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {/* Three-dot menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 rounded-xl">
+                <DropdownMenuItem onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}>
+                  <Search className="h-4 w-4 mr-2" /> Search
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDisappearMode(!disappearMode)}>
+                  {disappearMode ? <Timer className="h-4 w-4 mr-2" /> : <TimerOff className="h-4 w-4 mr-2" />}
+                  {disappearMode ? "Disable disappearing" : "Disappearing messages"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/settings")}>
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive focus:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" /> Clear chat
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
         {/* Search bar */}
         <AnimatePresence>
           {searchOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
               <div className="flex items-center gap-2 mt-2 bg-muted/50 rounded-full px-3 py-1.5">
                 <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search messages..."
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
+                <input ref={searchInputRef} type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search messages..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
                 {searchResults.length > 0 && (
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                      {searchIndex + 1}/{searchResults.length}
-                    </span>
-                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{searchIndex + 1}/{searchResults.length}</span>
+                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><ChevronUp className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
                   </div>
                 )}
-                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
               </div>
             </motion.div>
           )}
@@ -578,12 +680,7 @@ const Chat = () => {
       {/* Disappearing mode banner */}
       <AnimatePresence>
         {disappearMode && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="px-4 py-1.5 bg-primary/5 flex items-center justify-center gap-1.5">
               <Timer className="h-3 w-3 text-primary" />
               <span className="text-[10px] text-primary font-medium">Messages will disappear 30s after being read</span>
@@ -604,24 +701,16 @@ const Chat = () => {
         {groupedTimeline.map((group) => (
           <div key={group.date}>
             <div className="flex justify-center my-3">
-              <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">
-                {group.date}
-              </span>
+              <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">{group.date}</span>
             </div>
             <div className="space-y-1">
               {group.items.map((item) => {
                 if (item.type === "call") {
                   const call = item.data;
                   return (
-                    <CallEvent
-                      key={`call-${call.id}`}
-                      callType={call.call_type}
-                      status={call.status}
-                      direction={call.call_direction}
-                      durationSeconds={call.duration_seconds}
-                      createdAt={call.created_at}
-                      isMine={call.caller_id === user?.id}
-                    />
+                    <CallEvent key={`call-${call.id}`} callType={call.call_type} status={call.status}
+                      direction={call.call_direction} durationSeconds={call.duration_seconds}
+                      createdAt={call.created_at} isMine={call.caller_id === user?.id} />
                   );
                 }
                 const msg = item.data;
@@ -631,40 +720,28 @@ const Chat = () => {
                 const isMine = msg.sender_id === user?.id;
                 const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
                 return (
-                  <motion.div
-                    key={msg.id}
-                    id={`msg-${msg.id}`}
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
+                  <motion.div key={msg.id} id={`msg-${msg.id}`}
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"} group ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}
-                  >
+                    className={`flex ${isMine ? "justify-end" : "justify-start"} group ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}>
                     <div className="flex items-end gap-1 max-w-[78%]">
                       {isMine && (
-                        <button
-                          onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1"
-                        >
+                        <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1">
                           <Reply className="h-3 w-3" />
                         </button>
                       )}
                       <div className={`rounded-[18px] px-3.5 py-2 ${
-                        isMine
-                          ? "bg-foreground text-background rounded-br-[6px]"
-                          : "bg-card border border-border/60 rounded-bl-[6px]"
+                        isMine ? "bg-foreground text-background rounded-br-[6px]" : "bg-card border border-border/60 rounded-bl-[6px]"
                       } ${isDisappearing ? "ring-1 ring-primary/30" : ""}`}>
                         {repliedMsg && (
-                          <QuotedMessage
-                            content={repliedMsg.decryptedContent || "Message"}
-                            senderName={repliedMsg.sender_id === user?.id ? "You" : partnerName}
-                            isMine={isMine}
-                          />
+                          <QuotedMessage content={repliedMsg.decryptedContent || "Message"}
+                            senderName={repliedMsg.sender_id === user?.id ? "You" : partnerName} isMine={isMine} />
                         )}
-                        {msg.message_type === "voice" && msg.file_url && (
-                          <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
-                        )}
+                        {msg.message_type === "voice" && msg.file_url && <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />}
                         {msg.message_type === "image" && msg.file_url && (
-                          <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
+                          <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared"
+                            className="rounded-xl mb-1.5 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
                         )}
                         {msg.message_type === "file" && msg.file_name && (
                           <a href={msg.file_url || "#"} target="_blank" rel="noopener"
@@ -678,18 +755,14 @@ const Chat = () => {
                         )}
                         <div className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end" : ""}`}>
                           {isDisappearing && <Timer className="h-2.5 w-2.5 opacity-40" />}
-                          <span className={`text-[10px] ${isMine ? "text-background/50" : "text-muted-foreground"}`}>
-                            {formatTime(msg.created_at)}
-                          </span>
+                          <span className={`text-[10px] ${isMine ? "text-background/50" : "text-muted-foreground"}`}>{formatTime(msg.created_at)}</span>
                           {isMine && <MessageStatus isRead={msg.is_read} isMine={isMine} />}
                         </div>
                         <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
                       </div>
                       {!isMine && (
-                        <button
-                          onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1"
-                        >
+                        <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1">
                           <Reply className="h-3 w-3" />
                         </button>
                       )}
@@ -703,40 +776,28 @@ const Chat = () => {
 
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="h-16 w-16 rounded-full bg-accent/50 flex items-center justify-center">
-              <span className="text-2xl">💬</span>
-            </div>
+            <div className="h-16 w-16 rounded-full bg-accent/50 flex items-center justify-center"><span className="text-2xl">💬</span></div>
             <p className="text-sm text-muted-foreground text-center max-w-[200px]">
               {partnerId ? "Start your conversation" : "Link with your partner in settings"}
             </p>
           </div>
         )}
 
-        <AnimatePresence>
-          {partnerTyping && <TypingIndicator />}
-        </AnimatePresence>
+        <AnimatePresence>{partnerTyping && <TypingIndicator />}</AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
       {/* Attach menu */}
       <AnimatePresence>
         {showAttach && !isRecording && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            className="px-4 pb-1.5 flex gap-2"
-          >
-            <button onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="px-4 pb-1.5 flex gap-2">
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
               <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> Photo
             </button>
-            <button onClick={() => imageInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
               <Camera className="h-3.5 w-3.5 text-muted-foreground" /> Camera
             </button>
-            <button onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
               <FileText className="h-3.5 w-3.5 text-muted-foreground" /> File
             </button>
           </motion.div>
@@ -746,22 +807,16 @@ const Chat = () => {
       {/* Reply preview */}
       <AnimatePresence>
         {replyTo && (
-          <ReplyPreview
-            replyToContent={replyTo.decryptedContent || "Message"}
-            replyToSenderName={replyTo.sender_id === user?.id ? "You" : partnerName}
-            onCancel={() => setReplyTo(null)}
-          />
+          <ReplyPreview replyToContent={replyTo.decryptedContent || "Message"}
+            replyToSenderName={replyTo.sender_id === user?.id ? "You" : partnerName} onCancel={() => setReplyTo(null)} />
         )}
       </AnimatePresence>
 
       {/* Input area */}
-      <div className="px-3 pb-20 pt-1.5">
+      <div className="px-3 pb-4 pt-1.5 safe-bottom">
         {isRecording ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-3 bg-destructive/8 rounded-full border border-destructive/15 px-4 py-2.5"
-          >
+          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-3 bg-destructive/8 rounded-full border border-destructive/15 px-4 py-2.5">
             <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1 }}
               className="h-2.5 w-2.5 rounded-full bg-destructive shrink-0" />
             <span className="text-sm font-medium text-destructive flex-1">{formatRecTime(recordingTime)}</span>
@@ -773,39 +828,37 @@ const Chat = () => {
             </button>
           </motion.div>
         ) : (
-          <div className="flex items-center gap-1.5 bg-card/80 backdrop-blur-sm rounded-full border border-border/50 px-2 py-1.5 shadow-sm">
-            <button onClick={() => setShowAttach(!showAttach)}
-              className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-              <Paperclip className="h-4 w-4" />
-            </button>
-            <input
-              ref={inputRef}
-              type="text"
-              value={message}
-              onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={replyTo ? "Reply..." : "Message"}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1"
-            />
+          <div className="flex items-center gap-1.5">
+            <div className="flex-1 flex items-center gap-1.5 bg-card/80 backdrop-blur-sm rounded-full border border-border/50 px-2 py-1.5 shadow-sm">
+              <button onClick={() => setShowAttach(!showAttach)}
+                className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                <Paperclip className="h-4 w-4" />
+              </button>
+              <input ref={inputRef} type="text" value={message}
+                onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder={replyTo ? "Reply..." : "Message"}
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1" />
+            </div>
             {message.trim() ? (
-              <motion.button
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                onClick={handleSend}
-                className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center shrink-0"
-              >
-                <Send className="h-3.5 w-3.5 text-background" />
+              <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} onClick={handleSend}
+                className="h-10 w-10 rounded-full bg-foreground flex items-center justify-center shrink-0">
+                <Send className="h-4 w-4 text-background" />
               </motion.button>
             ) : (
               <button
                 onTouchStart={startRecording} onTouchEnd={stopRecording}
                 onMouseDown={startRecording} onMouseUp={stopRecording}
                 onMouseLeave={() => { if (isRecording) cancelRecording(); }}
-                className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform"
-              >
-                <Mic className="h-3.5 w-3.5 text-background" />
+                className="h-10 w-10 rounded-full bg-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform">
+                <Mic className="h-4 w-4 text-background" />
               </button>
             )}
+            {/* Grid menu floating button */}
+            <button onClick={() => setShowGridMenu(true)}
+              className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary hover:bg-primary/20 transition-colors">
+              <LayoutGrid className="h-4 w-4" />
+            </button>
           </div>
         )}
       </div>
@@ -827,12 +880,8 @@ const Chat = () => {
       </AlertDialog>
 
       {/* Overlays */}
-      <AnimatePresence>
-        {showGridMenu && <GridMenu onClose={() => setShowGridMenu(false)} />}
-      </AnimatePresence>
-      <AnimatePresence>
-        {viewingPhoto && <PhotoViewer src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
-      </AnimatePresence>
+      <AnimatePresence>{showGridMenu && <GridMenu onClose={() => setShowGridMenu(false)} />}</AnimatePresence>
+      <AnimatePresence>{viewingPhoto && <PhotoViewer src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}</AnimatePresence>
     </div>
   );
 };
