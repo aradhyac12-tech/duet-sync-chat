@@ -8,6 +8,7 @@ import QuotedMessage from "@/components/chat/QuotedMessage";
 import PhotoViewer from "@/components/chat/PhotoViewer";
 import GridMenu from "@/components/chat/GridMenu";
 import CallEvent from "@/components/chat/CallEvent";
+import IncomingCallOverlay from "@/components/IncomingCallOverlay";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -430,10 +431,8 @@ const Chat = () => {
     if (!user || !partnerId) return;
     setIsStartingCall(true);
     try {
-      // Request permissions
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === "video" });
       stream.getTracks().forEach(t => t.stop());
-
       playCallSound();
 
       const { data, error: fnError } = await supabase.functions.invoke("daily-call", {
@@ -455,13 +454,35 @@ const Chat = () => {
 
       await joinCall(data.url, tokenData.token);
       if (mode === "voice") toggleVideo();
-      toast({ title: mode === "video" ? "Video call started 📹" : "Voice call started 📞" });
+      toast({ title: mode === "video" ? "Video call started" : "Voice call started" });
     } catch (err: any) {
       console.error("Start call error:", err);
       toast({ title: "Call failed", description: err.message, variant: "destructive" });
     }
     setIsStartingCall(false);
   };
+
+  // Accept incoming call
+  const handleAcceptIncoming = useCallback(async (roomName: string, callType: string) => {
+    try {
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke("daily-call", {
+        body: { action: "get-token", roomName },
+      });
+      if (tokenError || tokenData?.error) throw new Error("Failed to get token");
+
+      // Find the room URL from Daily
+      const roomUrl = `https://${roomName.includes('.') ? '' : 'lovable.'}daily.co/${roomName}`;
+      await joinCall(tokenData.url || roomUrl, tokenData.token);
+      if (callType === "voice") toggleVideo();
+      toast({ title: "Call connected" });
+    } catch (err: any) {
+      toast({ title: "Couldn't join call", description: err.message, variant: "destructive" });
+    }
+  }, [joinCall, toggleVideo, toast]);
+
+  const handleDeclineIncoming = useCallback((_callId: string) => {
+    toast({ title: "Call declined" });
+  }, [toast]);
 
   const endCall = async () => {
     if (currentCallId && user) {
@@ -471,7 +492,6 @@ const Chat = () => {
       setCurrentCallId(null);
     }
     leaveCall();
-    toast({ title: "Call ended" });
   };
 
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -512,7 +532,7 @@ const Chat = () => {
   // === In-call fullscreen overlay ===
   if (callState === "joined" || callState === "joining") {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-foreground relative">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-[hsl(var(--foreground))] relative">
         <video ref={remoteVideoRef} autoPlay playsInline
           className={`absolute inset-0 w-full h-full object-cover ${isScreenSharing ? "hidden" : ""}`} />
         <video ref={screenShareRef} autoPlay playsInline
@@ -520,67 +540,75 @@ const Chat = () => {
 
         {participantCount <= 1 && callState === "joined" && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-background/80">
-              <div className="h-20 w-20 rounded-full bg-background/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
-                <Phone className="h-8 w-8" />
-              </div>
-              <p className="text-lg font-semibold">Calling {partnerName}...</p>
-              <p className="text-sm opacity-60 mt-1">Waiting for answer</p>
+            <div className="text-center text-background">
+              <motion.div
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="h-24 w-24 rounded-full bg-background/10 flex items-center justify-center mx-auto mb-5"
+              >
+                {partnerAvatar ? (
+                  <img src={partnerAvatar} alt="" className="h-full w-full rounded-full object-cover" />
+                ) : (
+                  <Phone className="h-10 w-10 text-background/60" />
+                )}
+              </motion.div>
+              <p className="text-xl font-medium">{partnerName}</p>
+              <p className="text-sm text-background/40 mt-1">Ringing...</p>
             </div>
           </div>
         )}
 
         {callState === "joining" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-foreground">
-            <p className="text-lg font-semibold animate-pulse text-background/80">Connecting...</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-[hsl(var(--foreground))]">
+            <p className="text-lg font-medium animate-pulse text-background/60">Connecting...</p>
           </div>
         )}
 
+        {/* Local video PiP */}
         <motion.div drag dragMomentum={false} dragElastic={0.1}
-          className="absolute top-14 right-4 w-28 h-40 rounded-2xl overflow-hidden shadow-lg border-2 border-background/20 z-10 cursor-grab active:cursor-grabbing">
+          className="absolute top-14 right-4 w-[100px] h-[140px] rounded-2xl overflow-hidden shadow-2xl border border-background/10 z-10 cursor-grab active:cursor-grabbing">
           <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           {!isVideoOn && (
-            <div className="absolute inset-0 bg-foreground/80 flex items-center justify-center">
-              <VideoOff className="h-6 w-6 text-background/60" />
+            <div className="absolute inset-0 bg-muted flex items-center justify-center">
+              <VideoOff className="h-5 w-5 text-muted-foreground" />
             </div>
           )}
         </motion.div>
 
-        <div className="absolute top-4 left-4 right-16 z-10 flex items-center gap-2">
-          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2">
-            <Wifi className="h-3.5 w-3.5 text-background" />
-            <span className="text-xs text-background font-medium">{callNetworkQuality}</span>
-          </div>
-          <div className="bg-background/20 backdrop-blur-md rounded-full px-3 py-1.5">
-            <span className="text-xs text-background font-medium font-mono">{formatCallDuration(callDuration)}</span>
+        {/* Call info bar */}
+        <div className="absolute top-4 left-4 right-28 z-10 flex items-center gap-2 safe-top">
+          <div className="bg-background/15 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5">
+            <div className={`h-1.5 w-1.5 rounded-full ${
+              callNetworkQuality === "excellent" || callNetworkQuality === "good" ? "bg-green-400" :
+              callNetworkQuality === "fair" ? "bg-yellow-400" : "bg-red-400"
+            }`} />
+            <span className="text-[11px] text-background/80 font-mono">{formatCallDuration(callDuration)}</span>
           </div>
           {isScreenSharing && (
-            <div className="bg-primary/80 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5">
+            <div className="bg-primary/60 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1">
               <Monitor className="h-3 w-3 text-background" />
-              <span className="text-[10px] text-background font-medium">Sharing</span>
+              <span className="text-[10px] text-background">Sharing</span>
             </div>
           )}
         </div>
 
+        {/* Call controls */}
         <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-4">
             <button onClick={toggleAudio}
-              className={`rounded-full flex items-center justify-center transition-colors ${isAudioOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
-              style={{ width: 52, height: 52 }}>
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isAudioOn ? "bg-background/15 backdrop-blur-md" : "bg-destructive"}`}>
               {isAudioOn ? <Mic className="h-5 w-5 text-background" /> : <MicOff className="h-5 w-5 text-background" />}
             </button>
             <button onClick={toggleVideo}
-              className={`rounded-full flex items-center justify-center transition-colors ${isVideoOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
-              style={{ width: 52, height: 52 }}>
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isVideoOn ? "bg-background/15 backdrop-blur-md" : "bg-destructive"}`}>
               {isVideoOn ? <Video className="h-5 w-5 text-background" /> : <VideoOff className="h-5 w-5 text-background" />}
             </button>
             <button onClick={toggleScreenShare}
-              className={`rounded-full flex items-center justify-center transition-colors ${isScreenSharing ? "bg-primary" : "bg-background/20 backdrop-blur-md"}`}
-              style={{ width: 52, height: 52 }}>
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isScreenSharing ? "bg-primary" : "bg-background/15 backdrop-blur-md"}`}>
               {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" /> : <Monitor className="h-5 w-5 text-background" />}
             </button>
-            <button onClick={endCall} className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
-              <PhoneOff className="h-7 w-7 text-background" />
+            <button onClick={endCall} className="h-14 w-14 rounded-full bg-destructive flex items-center justify-center shadow-lg">
+              <PhoneOff className="h-6 w-6 text-background" />
             </button>
           </div>
         </div>
@@ -590,11 +618,14 @@ const Chat = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header - WhatsApp style */}
-      <header className="safe-top px-3 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
+      {/* Incoming call overlay */}
+      <IncomingCallOverlay onAccept={handleAcceptIncoming} onDecline={handleDeclineIncoming} />
+
+      {/* Header */}
+      <header className="safe-top px-4 pt-3 pb-2.5 bg-background border-b border-border/40 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden">
               {partnerAvatar ? (
                 <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -602,44 +633,41 @@ const Chat = () => {
               )}
             </div>
             <div>
-              <h1 className="text-[15px] font-semibold tracking-tight text-foreground leading-tight">
+              <h1 className="text-sm font-semibold text-foreground leading-tight">
                 {partnerId ? partnerName : "DuoSpace"}
               </h1>
               <p className="text-[11px] text-muted-foreground leading-tight">
-                {partnerTyping ? "typing..." : e2eReady ? "encrypted" : partnerId ? "connected" : "Link a partner to chat"}
+                {partnerTyping ? "typing..." : e2eReady ? "end-to-end encrypted" : partnerId ? "online" : "Link a partner in settings"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-0.5">
-            {/* Video call */}
+          <div className="flex items-center gap-1">
             <button
               onClick={() => startCall("video")}
               disabled={isStartingCall || !partnerId}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30"
             >
-              <Video className="h-4.5 w-4.5" />
+              <Video className="h-[18px] w-[18px]" />
             </button>
-            {/* Voice call */}
             <button
               onClick={() => startCall("voice")}
               disabled={isStartingCall || !partnerId}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30"
             >
-              <Phone className="h-4 w-4" />
+              <Phone className="h-[17px] w-[17px]" />
             </button>
-            {/* Three-dot menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-                  <MoreVertical className="h-4 w-4" />
+                <button className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                  <MoreVertical className="h-[18px] w-[18px]" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 rounded-xl">
+              <DropdownMenuContent align="end" className="w-48 rounded-xl border-border/50">
                 <DropdownMenuItem onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}>
-                  <Search className="h-4 w-4 mr-2" /> Search
+                  <Search className="h-4 w-4 mr-2.5" /> Search
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setDisappearMode(!disappearMode)}>
-                  {disappearMode ? <Timer className="h-4 w-4 mr-2" /> : <TimerOff className="h-4 w-4 mr-2" />}
+                  {disappearMode ? <Timer className="h-4 w-4 mr-2.5" /> : <TimerOff className="h-4 w-4 mr-2.5" />}
                   {disappearMode ? "Disable disappearing" : "Disappearing messages"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -648,7 +676,7 @@ const Chat = () => {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive focus:text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" /> Clear chat
+                  <Trash2 className="h-4 w-4 mr-2.5" /> Clear chat
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -659,18 +687,18 @@ const Chat = () => {
         <AnimatePresence>
           {searchOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
-              <div className="flex items-center gap-2 mt-2 bg-muted/50 rounded-full px-3 py-1.5">
+              <div className="flex items-center gap-2 mt-2 bg-muted/40 rounded-full px-3 py-1.5">
                 <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <input ref={searchInputRef} type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search messages..." className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
                 {searchResults.length > 0 && (
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-muted-foreground whitespace-nowrap">{searchIndex + 1}/{searchResults.length}</span>
-                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><ChevronUp className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronUp className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
                   </div>
                 )}
-                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
               </div>
             </motion.div>
           )}
@@ -683,7 +711,7 @@ const Chat = () => {
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="px-4 py-1.5 bg-primary/5 flex items-center justify-center gap-1.5">
               <Timer className="h-3 w-3 text-primary" />
-              <span className="text-[10px] text-primary font-medium">Messages will disappear 30s after being read</span>
+              <span className="text-[10px] text-primary font-medium">Messages disappear 30s after read</span>
             </div>
           </motion.div>
         )}
@@ -691,7 +719,7 @@ const Chat = () => {
 
       {/* Messages */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-3"
+        className="flex-1 overflow-y-auto px-3 py-3"
         style={chatWallpaper ? {
           backgroundImage: chatWallpaper.startsWith("url(") ? chatWallpaper : undefined,
           background: chatWallpaper.startsWith("linear") ? chatWallpaper : undefined,
@@ -703,7 +731,7 @@ const Chat = () => {
             <div className="flex justify-center my-3">
               <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">{group.date}</span>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {group.items.map((item) => {
                 if (item.type === "call") {
                   const call = item.data;
@@ -721,19 +749,21 @@ const Chat = () => {
                 const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
                 return (
                   <motion.div key={msg.id} id={`msg-${msg.id}`}
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }} animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"} group ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}>
-                    <div className="flex items-end gap-1 max-w-[78%]">
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: isDisappearing ? 0.6 : 1, y: 0 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"} group py-[2px] ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}>
+                    <div className="flex items-end gap-1 max-w-[80%]">
                       {isMine && (
                         <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
                           className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1">
                           <Reply className="h-3 w-3" />
                         </button>
                       )}
-                      <div className={`rounded-[18px] px-3.5 py-2 ${
-                        isMine ? "bg-foreground text-background rounded-br-[6px]" : "bg-card border border-border/60 rounded-bl-[6px]"
-                      } ${isDisappearing ? "ring-1 ring-primary/30" : ""}`}>
+                      <div className={`rounded-2xl px-3 py-2 ${
+                        isMine
+                          ? "bg-foreground text-background rounded-br-md"
+                          : "bg-card border border-border/50 rounded-bl-md"
+                      } ${isDisappearing ? "ring-1 ring-primary/20" : ""}`}>
                         {repliedMsg && (
                           <QuotedMessage content={repliedMsg.decryptedContent || "Message"}
                             senderName={repliedMsg.sender_id === user?.id ? "You" : partnerName} isMine={isMine} />
@@ -741,21 +771,21 @@ const Chat = () => {
                         {msg.message_type === "voice" && msg.file_url && <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />}
                         {msg.message_type === "image" && msg.file_url && (
                           <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared"
-                            className="rounded-xl mb-1.5 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
+                            className="rounded-xl mb-1 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
                         )}
                         {msg.message_type === "file" && msg.file_name && (
                           <a href={msg.file_url || "#"} target="_blank" rel="noopener"
-                            className={`flex items-center gap-2 mb-1 rounded-lg px-2.5 py-1.5 ${isMine ? "bg-background/10" : "bg-muted/50"}`}>
-                            <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                            className={`flex items-center gap-2 mb-1 rounded-lg px-2 py-1.5 ${isMine ? "bg-background/10" : "bg-muted/50"}`}>
+                            <FileText className="h-3.5 w-3.5 shrink-0 opacity-50" />
                             <span className="text-xs truncate">{msg.file_name}</span>
                           </a>
                         )}
                         {msg.message_type !== "voice" && msg.decryptedContent && (
-                          <p className="text-[14px] leading-relaxed">{msg.decryptedContent}</p>
+                          <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{msg.decryptedContent}</p>
                         )}
                         <div className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end" : ""}`}>
-                          {isDisappearing && <Timer className="h-2.5 w-2.5 opacity-40" />}
-                          <span className={`text-[10px] ${isMine ? "text-background/50" : "text-muted-foreground"}`}>{formatTime(msg.created_at)}</span>
+                          {isDisappearing && <Timer className="h-2.5 w-2.5 opacity-30" />}
+                          <span className={`text-[10px] ${isMine ? "text-background/40" : "text-muted-foreground/60"}`}>{formatTime(msg.created_at)}</span>
                           {isMine && <MessageStatus isRead={msg.is_read} isMine={isMine} />}
                         </div>
                         <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
@@ -776,7 +806,9 @@ const Chat = () => {
 
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="h-16 w-16 rounded-full bg-accent/50 flex items-center justify-center"><span className="text-2xl">💬</span></div>
+            <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
+              <span className="text-xl">💬</span>
+            </div>
             <p className="text-sm text-muted-foreground text-center max-w-[200px]">
               {partnerId ? "Start your conversation" : "Link with your partner in settings"}
             </p>
@@ -790,14 +822,14 @@ const Chat = () => {
       {/* Attach menu */}
       <AnimatePresence>
         {showAttach && !isRecording && (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} className="px-4 pb-1.5 flex gap-2">
-            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="px-4 pb-1 flex gap-2">
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-1.5 bg-muted/60 rounded-full px-3 py-2 text-xs">
               <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" /> Photo
             </button>
-            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+            <button onClick={() => imageInputRef.current?.click()} className="flex items-center gap-1.5 bg-muted/60 rounded-full px-3 py-2 text-xs">
               <Camera className="h-3.5 w-3.5 text-muted-foreground" /> Camera
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-card rounded-full border border-border/60 px-4 py-2 text-xs active:scale-[0.97] transition-transform">
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 bg-muted/60 rounded-full px-3 py-2 text-xs">
               <FileText className="h-3.5 w-3.5 text-muted-foreground" /> File
             </button>
           </motion.div>
@@ -813,12 +845,12 @@ const Chat = () => {
       </AnimatePresence>
 
       {/* Input area */}
-      <div className="px-3 pb-4 pt-1.5 safe-bottom">
+      <div className="px-3 pb-3 pt-1.5 safe-bottom bg-background">
         {isRecording ? (
           <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center gap-3 bg-destructive/8 rounded-full border border-destructive/15 px-4 py-2.5">
+            className="flex items-center gap-3 bg-destructive/5 rounded-full border border-destructive/10 px-4 py-2.5">
             <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1 }}
-              className="h-2.5 w-2.5 rounded-full bg-destructive shrink-0" />
+              className="h-2 w-2 rounded-full bg-destructive shrink-0" />
             <span className="text-sm font-medium text-destructive flex-1">{formatRecTime(recordingTime)}</span>
             <button onClick={cancelRecording} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
               <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -829,7 +861,7 @@ const Chat = () => {
           </motion.div>
         ) : (
           <div className="flex items-center gap-1.5">
-            <div className="flex-1 flex items-center gap-1.5 bg-card/80 backdrop-blur-sm rounded-full border border-border/50 px-2 py-1.5 shadow-sm">
+            <div className="flex-1 flex items-center gap-1 bg-muted/30 rounded-full border border-border/30 px-2 py-1">
               <button onClick={() => setShowAttach(!showAttach)}
                 className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
                 <Paperclip className="h-4 w-4" />
@@ -838,7 +870,7 @@ const Chat = () => {
                 onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder={replyTo ? "Reply..." : "Message"}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1" />
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 py-1.5" />
             </div>
             {message.trim() ? (
               <motion.button initial={{ scale: 0 }} animate={{ scale: 1 }} onClick={handleSend}
@@ -854,9 +886,8 @@ const Chat = () => {
                 <Mic className="h-4 w-4 text-background" />
               </button>
             )}
-            {/* Grid menu floating button */}
             <button onClick={() => setShowGridMenu(true)}
-              className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary hover:bg-primary/20 transition-colors">
+              className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
               <LayoutGrid className="h-4 w-4" />
             </button>
           </div>
@@ -869,12 +900,12 @@ const Chat = () => {
       <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
         <AlertDialogContent className="rounded-2xl max-w-[320px]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Clear chat?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">All messages will be permanently deleted.</AlertDialogDescription>
+            <AlertDialogTitle className="text-sm font-semibold">Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">All messages will be permanently deleted.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full text-sm h-9">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={clearChat} className="rounded-full bg-destructive text-destructive-foreground text-sm h-9">Clear</AlertDialogAction>
+            <AlertDialogCancel className="rounded-full text-xs h-8">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={clearChat} className="rounded-full bg-destructive text-destructive-foreground text-xs h-8">Clear</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
