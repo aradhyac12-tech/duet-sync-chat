@@ -211,18 +211,13 @@ const Chat = () => {
     const disappearingIds = unread.filter(m => m.disappear_at === "pending").map(m => m.id);
     const normalIds = unreadIds.filter(id => !disappearingIds.includes(id));
 
-    const updates: Promise<any>[] = [];
-
-    if (normalIds.length > 0) {
-      updates.push(
-        supabase.from("messages").update({ is_read: true }).in("id", normalIds).then()
-      );
-    }
-    if (disappearingIds.length > 0) {
-      updates.push(
-        supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds).then()
-      );
-    }
+    const runUpdates = async () => {
+      if (normalIds.length > 0) {
+        await supabase.from("messages").update({ is_read: true }).in("id", normalIds);
+      }
+      if (disappearingIds.length > 0) {
+        await supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds);
+      }
 
     Promise.all(updates).then(() => {
       setMessages((prev) =>
