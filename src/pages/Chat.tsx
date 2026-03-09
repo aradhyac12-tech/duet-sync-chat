@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
@@ -98,6 +98,11 @@ const Chat = () => {
   const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DecryptedMessage | null>(null);
   const [disappearMode, setDisappearMode] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [searchIndex, setSearchIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -389,6 +394,29 @@ const Chat = () => {
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Search logic
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setSearchIndex(0);
+      return;
+    }
+    const q = searchQuery.toLowerCase();
+    const results = messages
+      .filter(m => (m.decryptedContent && m.decryptedContent.toLowerCase().includes(q)) || (m.file_name && m.file_name.toLowerCase().includes(q)))
+      .map(m => m.id);
+    setSearchResults(results);
+    setSearchIndex(results.length > 0 ? results.length - 1 : 0);
+  }, [searchQuery, messages]);
+
+  // Scroll to active search result
+  useEffect(() => {
+    if (searchResults.length === 0) return;
+    const id = searchResults[searchIndex];
+    const el = document.getElementById(`msg-${id}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [searchIndex, searchResults]);
+
   // Group messages by date
   const groupedMessages: { date: string; msgs: DecryptedMessage[] }[] = [];
   messages.forEach(msg => {
@@ -425,6 +453,12 @@ const Chat = () => {
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => setDisappearMode(!disappearMode)}
               className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
                 disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
@@ -447,6 +481,47 @@ const Chat = () => {
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Search bar */}
+        <AnimatePresence>
+          {searchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-2 mt-2 bg-muted/50 rounded-full px-3 py-1.5">
+                <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search messages..."
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+                {searchResults.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {searchIndex + 1}/{searchResults.length}
+                    </span>
+                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Disappearing mode banner */}
@@ -485,15 +560,18 @@ const Chat = () => {
             <div className="space-y-1">
               {group.msgs.map((msg) => {
                 const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
+                const isHighlighted = searchResults.includes(msg.id);
+                const isActiveResult = searchResults[searchIndex] === msg.id;
                 const isMine = msg.sender_id === user?.id;
                 const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
                 return (
                   <motion.div
                     key={msg.id}
+                    id={`msg-${msg.id}`}
                     initial={{ opacity: 0, y: 6, scale: 0.98 }}
                     animate={{ opacity: isDisappearing ? 0.7 : 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"} group`}
+                    className={`flex ${isMine ? "justify-end" : "justify-start"} group ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}
                   >
                     <div className="flex items-end gap-1 max-w-[78%]">
                       {isMine && (
