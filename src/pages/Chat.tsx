@@ -189,6 +189,25 @@ const Chat = () => {
     fetchMessages();
   }, [user, partnerId, decryptMessages]);
 
+  // Fetch call history between partners
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const fetchCalls = async () => {
+      const { data } = await supabase
+        .from("call_history").select("*")
+        .or(`and(caller_id.eq.${user.id},receiver_id.eq.${partnerId}),and(caller_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+        .order("created_at", { ascending: true }).limit(200);
+      if (data) setCallHistory(data as CallEntry[]);
+    };
+    fetchCalls();
+
+    const channel = supabase
+      .channel("call-history-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "call_history" }, () => fetchCalls())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, partnerId]);
+
   // Realtime
   useEffect(() => {
     if (!user) return;
