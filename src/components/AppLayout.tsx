@@ -1,82 +1,57 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import BottomNav from "./BottomNav";
-import { useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence, PanInfo } from "framer-motion";
+import { useRef, useCallback } from "react";
 
 const TAB_ORDER = ["/chat", "/gallery", "/calls", "/map", "/playlist", "/us"];
-const SWIPE_THRESHOLD = 50;
-const SWIPE_VELOCITY = 300;
+const SWIPE_THRESHOLD = 60;
 
 const AppLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [direction, setDirection] = useState(0);
-  const startXRef = useRef(0);
-  const startYRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isSwipingRef = useRef(false);
 
   const currentIndex = TAB_ORDER.indexOf(location.pathname);
-
-  const handlePanEnd = useCallback(
-    (_: any, info: PanInfo) => {
-      if (currentIndex === -1) return;
-
-      // Only swipe if horizontal movement is significantly more than vertical
-      if (Math.abs(info.offset.y) > Math.abs(info.offset.x) * 0.8) return;
-
-      const swipedLeft = info.offset.x < -SWIPE_THRESHOLD || info.velocity.x < -SWIPE_VELOCITY;
-      const swipedRight = info.offset.x > SWIPE_THRESHOLD || info.velocity.x > SWIPE_VELOCITY;
-
-      if (swipedLeft && currentIndex < TAB_ORDER.length - 1) {
-        setDirection(1);
-        navigate(TAB_ORDER[currentIndex + 1]);
-      } else if (swipedRight && currentIndex > 0) {
-        setDirection(-1);
-        navigate(TAB_ORDER[currentIndex - 1]);
-      }
-    },
-    [currentIndex, navigate]
-  );
-
-  // Determine if swiping should be enabled (not on map which uses touch for panning)
   const isSwipeEnabled = location.pathname !== "/map";
 
-  const variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? "30%" : "-30%",
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? "-30%" : "30%",
-      opacity: 0,
-    }),
-  };
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isSwipeEnabled) return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    isSwipingRef.current = false;
+  }, [isSwipeEnabled]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!isSwipeEnabled || !touchStartRef.current || currentIndex === -1) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+
+    // Only horizontal swipes, must be fast enough
+    if (Math.abs(dy) > Math.abs(dx) * 0.7 || dt > 500) {
+      touchStartRef.current = null;
+      return;
+    }
+
+    if (dx < -SWIPE_THRESHOLD && currentIndex < TAB_ORDER.length - 1) {
+      navigate(TAB_ORDER[currentIndex + 1]);
+    } else if (dx > SWIPE_THRESHOLD && currentIndex > 0) {
+      navigate(TAB_ORDER[currentIndex - 1]);
+    }
+
+    touchStartRef.current = null;
+  }, [currentIndex, navigate, isSwipeEnabled]);
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
-      <AnimatePresence mode="wait" custom={direction} initial={false}>
-        <motion.main
-          key={location.pathname}
-          custom={direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
-          className="pb-20"
-          {...(isSwipeEnabled
-            ? {
-                onPanEnd: handlePanEnd,
-              }
-            : {})}
-        >
-          <Outlet />
-        </motion.main>
-      </AnimatePresence>
+      <main
+        className="pb-20"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <Outlet />
+      </main>
       <BottomNav />
     </div>
   );
