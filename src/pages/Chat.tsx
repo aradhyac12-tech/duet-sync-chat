@@ -601,7 +601,7 @@ const Chat = () => {
           backgroundSize: "cover", backgroundPosition: "center",
         } : undefined}
       >
-        {groupedMessages.map((group) => (
+        {groupedTimeline.map((group) => (
           <div key={group.date}>
             <div className="flex justify-center my-3">
               <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">
@@ -609,7 +609,22 @@ const Chat = () => {
               </span>
             </div>
             <div className="space-y-1">
-              {group.msgs.map((msg) => {
+              {group.items.map((item) => {
+                if (item.type === "call") {
+                  const call = item.data;
+                  return (
+                    <CallEvent
+                      key={`call-${call.id}`}
+                      callType={call.call_type}
+                      status={call.status}
+                      direction={call.call_direction}
+                      durationSeconds={call.duration_seconds}
+                      createdAt={call.created_at}
+                      isMine={call.caller_id === user?.id}
+                    />
+                  );
+                }
+                const msg = item.data;
                 const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
                 const isHighlighted = searchResults.includes(msg.id);
                 const isActiveResult = searchResults[searchIndex] === msg.id;
