@@ -388,6 +388,9 @@ const Chat = () => {
             <p className="text-sm text-muted-foreground">{partnerId ? "No messages yet. Say hi! 👋" : "Link with your partner to start chatting"}</p>
           </div>
         )}
+        <AnimatePresence>
+          {partnerTyping && <TypingIndicator />}
+        </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
