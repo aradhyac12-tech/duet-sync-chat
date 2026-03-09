@@ -768,6 +768,14 @@ const Chat = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Overlays */}
+      <AnimatePresence>
+        {showGridMenu && <GridMenu onClose={() => setShowGridMenu(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {viewingPhoto && <PhotoViewer src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
+      </AnimatePresence>
     </div>
   );
 };
