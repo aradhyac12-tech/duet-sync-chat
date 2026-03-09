@@ -95,6 +95,8 @@ const Chat = () => {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<DecryptedMessage | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [partnerTyping, setPartnerTyping] = useState(false);
