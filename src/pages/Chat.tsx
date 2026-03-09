@@ -607,7 +607,7 @@ const Chat = () => {
                           <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
                         )}
                         {msg.message_type === "image" && msg.file_url && (
-                          <img src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full" />
+                          <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
                         )}
                         {msg.message_type === "file" && msg.file_name && (
                           <a href={msg.file_url || "#"} target="_blank" rel="noopener"
