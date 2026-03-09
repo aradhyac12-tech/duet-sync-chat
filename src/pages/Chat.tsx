@@ -458,15 +458,20 @@ const Chat = () => {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [searchIndex, searchResults]);
 
-  // Group messages by date
-  const groupedMessages: { date: string; msgs: DecryptedMessage[] }[] = [];
-  messages.forEach(msg => {
-    const date = new Date(msg.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    const last = groupedMessages[groupedMessages.length - 1];
+  // Merge messages and calls into timeline, grouped by date
+  const timeline: TimelineItem[] = [
+    ...messages.map(m => ({ type: "message" as const, data: m })),
+    ...callHistory.map(c => ({ type: "call" as const, data: c })),
+  ].sort((a, b) => new Date(a.data.created_at).getTime() - new Date(b.data.created_at).getTime());
+
+  const groupedTimeline: { date: string; items: TimelineItem[] }[] = [];
+  timeline.forEach(item => {
+    const date = new Date(item.data.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const last = groupedTimeline[groupedTimeline.length - 1];
     if (last?.date === date) {
-      last.msgs.push(msg);
+      last.items.push(item);
     } else {
-      groupedMessages.push({ date, msgs: [msg] });
+      groupedTimeline.push({ date, items: [item] });
     }
   });
 
