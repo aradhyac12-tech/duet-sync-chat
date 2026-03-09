@@ -453,6 +453,12 @@ const Chat = () => {
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => setDisappearMode(!disappearMode)}
               className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
                 disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
@@ -475,6 +481,47 @@ const Chat = () => {
             </DropdownMenu>
           </div>
         </div>
+
+        {/* Search bar */}
+        <AnimatePresence>
+          {searchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-2 mt-2 bg-muted/50 rounded-full px-3 py-1.5">
+                <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search messages..."
+                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+                {searchResults.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {searchIndex + 1}/{searchResults.length}
+                    </span>
+                    <button onClick={() => setSearchIndex(i => Math.max(0, i - 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => setSearchIndex(i => Math.min(searchResults.length - 1, i + 1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Disappearing mode banner */}
