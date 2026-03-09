@@ -2,6 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Shield, Mic, Square, Play, Pause } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
+import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -378,6 +379,7 @@ const Chat = () => {
                   {formatTime(msg.created_at)}
                   <MessageStatus isRead={msg.is_read} isMine={msg.sender_id === user?.id} />
                 </span>
+                <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={msg.sender_id === user?.id} />
               </div>
             </motion.div>
           ))}
