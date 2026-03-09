@@ -215,12 +215,12 @@ const Chat = () => {
 
     if (normalIds.length > 0) {
       updates.push(
-        supabase.from("messages").update({ is_read: true }).in("id", normalIds)
+        supabase.from("messages").update({ is_read: true }).in("id", normalIds).then()
       );
     }
     if (disappearingIds.length > 0) {
       updates.push(
-        supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds)
+        supabase.from("messages").update({ is_read: true, disappear_at: disappearAt }).in("id", disappearingIds).then()
       );
     }
 
