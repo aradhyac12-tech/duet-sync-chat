@@ -7,6 +7,7 @@ import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
 import PhotoViewer from "@/components/chat/PhotoViewer";
 import GridMenu from "@/components/chat/GridMenu";
+import CallEvent from "@/components/chat/CallEvent";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
