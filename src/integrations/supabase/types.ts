@@ -220,6 +220,7 @@ export type Database = {
           is_read: boolean
           message_type: string
           receiver_id: string
+          reply_to_id: string | null
           sender_id: string
         }
         Insert: {
@@ -232,6 +233,7 @@ export type Database = {
           is_read?: boolean
           message_type?: string
           receiver_id: string
+          reply_to_id?: string | null
           sender_id: string
         }
         Update: {
@@ -244,9 +246,18 @@ export type Database = {
           is_read?: boolean
           message_type?: string
           receiver_id?: string
+          reply_to_id?: string | null
           sender_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       playlist_songs: {
         Row: {
