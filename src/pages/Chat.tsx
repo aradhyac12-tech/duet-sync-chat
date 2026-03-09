@@ -379,6 +379,7 @@ const Chat = () => {
                   {formatTime(msg.created_at)}
                   <MessageStatus isRead={msg.is_read} isMine={msg.sender_id === user?.id} />
                 </span>
+                <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={msg.sender_id === user?.id} />
               </div>
             </motion.div>
           ))}
