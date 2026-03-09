@@ -1,18 +1,19 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, Camera, Mic, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown, Phone, Menu } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
+import PhotoViewer from "@/components/chat/PhotoViewer";
+import GridMenu from "@/components/chat/GridMenu";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
+import { playMessageSound, playCallSound } from "@/lib/sounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useE2E } from "@/hooks/useE2E";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -93,11 +94,14 @@ const Chat = () => {
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [showGridMenu, setShowGridMenu] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
   const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<DecryptedMessage | null>(null);
   const [disappearMode, setDisappearMode] = useState(false);
+  const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<string[]>([]);
@@ -178,6 +182,7 @@ const Chat = () => {
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
           const decryptedContent = msg.message_type === "text" ? await decrypt(msg.content) : msg.content;
           setMessages((prev) => [...prev, { ...msg, decryptedContent }]);
+          if (msg.sender_id !== user.id) playMessageSound();
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
@@ -434,8 +439,14 @@ const Chat = () => {
       {/* Header */}
       <header className="safe-top px-4 pt-3 pb-2 bg-background/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowGridMenu(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </button>
+            <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center overflow-hidden">
               {partnerAvatar ? (
                 <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -451,7 +462,7 @@ const Chat = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100); }}
               className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
@@ -459,26 +470,25 @@ const Chat = () => {
               <Search className="h-4 w-4" />
             </button>
             <button
+              onClick={() => { playCallSound(); navigate("/calls"); }}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Phone className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => setDisappearMode(!disappearMode)}
               className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
                 disappearMode ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
-              title={disappearMode ? "Disappearing messages ON" : "Disappearing messages OFF"}
             >
               {disappearMode ? <Timer className="h-4 w-4" /> : <TimerOff className="h-4 w-4" />}
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-xl min-w-[140px]">
-                <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive gap-2 text-sm">
-                  <Trash2 className="h-3.5 w-3.5" /> Clear chat
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              onClick={() => setShowClearDialog(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 
@@ -598,7 +608,7 @@ const Chat = () => {
                           <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />
                         )}
                         {msg.message_type === "image" && msg.file_url && (
-                          <img src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full" />
+                          <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared" className="rounded-xl mb-1.5 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
                         )}
                         {msg.message_type === "file" && msg.file_name && (
                           <a href={msg.file_url || "#"} target="_blank" rel="noopener"
@@ -759,6 +769,14 @@ const Chat = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Overlays */}
+      <AnimatePresence>
+        {showGridMenu && <GridMenu onClose={() => setShowGridMenu(false)} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {viewingPhoto && <PhotoViewer src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
+      </AnimatePresence>
     </div>
   );
 };
