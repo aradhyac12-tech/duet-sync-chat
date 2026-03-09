@@ -15,9 +15,6 @@ import { playMessageSound, playCallSound } from "@/lib/sounds";
 import { useAuth } from "@/hooks/useAuth";
 import { useE2E } from "@/hooks/useE2E";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
