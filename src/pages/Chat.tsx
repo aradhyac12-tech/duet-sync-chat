@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff } from "lucide-react";
+import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Mic, Square, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
 import TypingIndicator from "@/components/chat/TypingIndicator";
