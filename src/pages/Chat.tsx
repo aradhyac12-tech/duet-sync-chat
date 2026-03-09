@@ -2,6 +2,7 @@ import PageHeader from "@/components/PageHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, MoreVertical, Camera, Shield, Mic, Square, Play, Pause } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
+import TypingIndicator from "@/components/chat/TypingIndicator";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +93,9 @@ const Chat = () => {
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -185,6 +189,32 @@ const Chat = () => {
         );
       });
   }, [messages, user, partnerId]);
+
+  // Typing presence channel
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const channelName = [user.id, partnerId].sort().join("-");
+    const channel = supabase.channel(`typing-${channelName}`);
+    channel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload?.user_id === partnerId) {
+          setPartnerTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setPartnerTyping(false), 2000);
+        }
+      })
+      .subscribe();
+    presenceChannelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [user, partnerId]);
+
+  const broadcastTyping = useCallback(() => {
+    if (!presenceChannelRef.current || !user) return;
+    presenceChannelRef.current.send({ type: "broadcast", event: "typing", payload: { user_id: user.id } });
+  }, [user]);
 
   // Voice recording
   const startRecording = async () => {
@@ -358,6 +388,9 @@ const Chat = () => {
             <p className="text-sm text-muted-foreground">{partnerId ? "No messages yet. Say hi! 👋" : "Link with your partner to start chatting"}</p>
           </div>
         )}
+        <AnimatePresence>
+          {partnerTyping && <TypingIndicator />}
+        </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
@@ -404,7 +437,7 @@ const Chat = () => {
             <button onClick={() => setShowAttach(!showAttach)} className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
               <Paperclip className="h-4 w-4" />
             </button>
-            <input type="text" value={message} onChange={(e) => setMessage(e.target.value)}
+            <input type="text" value={message} onChange={(e) => { setMessage(e.target.value); broadcastTyping(); }}
               onKeyDown={(e) => e.key === "Enter" && handleSend()} placeholder="Type a message..."
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             {message.trim() ? (
