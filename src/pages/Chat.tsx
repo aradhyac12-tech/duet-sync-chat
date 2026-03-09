@@ -190,6 +190,32 @@ const Chat = () => {
       });
   }, [messages, user, partnerId]);
 
+  // Typing presence channel
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const channelName = [user.id, partnerId].sort().join("-");
+    const channel = supabase.channel(`typing-${channelName}`);
+    channel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload?.user_id === partnerId) {
+          setPartnerTyping(true);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setPartnerTyping(false), 2000);
+        }
+      })
+      .subscribe();
+    presenceChannelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [user, partnerId]);
+
+  const broadcastTyping = useCallback(() => {
+    if (!presenceChannelRef.current || !user) return;
+    presenceChannelRef.current.send({ type: "broadcast", event: "typing", payload: { user_id: user.id } });
+  }, [user]);
+
   // Voice recording
   const startRecording = async () => {
     try {
