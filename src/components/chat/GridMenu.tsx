@@ -1,9 +1,8 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, Image, Phone, MapPin, Music, Heart, Settings, X } from "lucide-react";
+import { Image, Phone, MapPin, Music, Heart, Settings, X } from "lucide-react";
 
 const items = [
-  { path: "/chat", icon: MessageCircle, label: "Chat", color: "bg-primary/15 text-primary" },
   { path: "/gallery", icon: Image, label: "Gallery", color: "bg-accent text-accent-foreground" },
   { path: "/calls", icon: Phone, label: "Calls", color: "bg-primary/15 text-primary" },
   { path: "/map", icon: MapPin, label: "Map", color: "bg-accent text-accent-foreground" },
@@ -26,6 +25,7 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       className="fixed inset-0 z-50 bg-background/90 backdrop-blur-2xl"
+      onClick={onClose}
     >
       <div className="safe-top px-4 pt-3 flex justify-end">
         <button
@@ -35,7 +35,7 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="px-6 pt-8">
+      <div className="px-6 pt-8" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold text-foreground mb-6">Quick Access</h2>
         <div className="grid grid-cols-3 gap-4">
           {items.map((item, i) => {
