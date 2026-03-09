@@ -38,6 +38,21 @@ interface DecryptedMessage extends Message {
   decryptedContent: string | null;
 }
 
+interface CallEntry {
+  id: string;
+  caller_id: string;
+  receiver_id: string | null;
+  call_type: string;
+  status: string;
+  call_direction: string;
+  duration_seconds: number | null;
+  created_at: string;
+}
+
+type TimelineItem =
+  | { type: "message"; data: DecryptedMessage }
+  | { type: "call"; data: CallEntry };
+
 const DISAPPEAR_DELAY_MS = 30000; // 30 seconds after read
 
 const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) => {
