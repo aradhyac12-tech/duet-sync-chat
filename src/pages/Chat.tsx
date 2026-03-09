@@ -7,6 +7,7 @@ import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
 import PhotoViewer from "@/components/chat/PhotoViewer";
 import GridMenu from "@/components/chat/GridMenu";
+import CallEvent from "@/components/chat/CallEvent";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -36,6 +37,21 @@ interface Message {
 interface DecryptedMessage extends Message {
   decryptedContent: string | null;
 }
+
+interface CallEntry {
+  id: string;
+  caller_id: string;
+  receiver_id: string | null;
+  call_type: string;
+  status: string;
+  call_direction: string;
+  duration_seconds: number | null;
+  created_at: string;
+}
+
+type TimelineItem =
+  | { type: "message"; data: DecryptedMessage }
+  | { type: "call"; data: CallEntry };
 
 const DISAPPEAR_DELAY_MS = 30000; // 30 seconds after read
 
@@ -92,6 +108,7 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
 const Chat = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
+  const [callHistory, setCallHistory] = useState<CallEntry[]>([]);
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
   const [showGridMenu, setShowGridMenu] = useState(false);
@@ -171,6 +188,25 @@ const Chat = () => {
     };
     fetchMessages();
   }, [user, partnerId, decryptMessages]);
+
+  // Fetch call history between partners
+  useEffect(() => {
+    if (!user || !partnerId) return;
+    const fetchCalls = async () => {
+      const { data } = await supabase
+        .from("call_history").select("*")
+        .or(`and(caller_id.eq.${user.id},receiver_id.eq.${partnerId}),and(caller_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+        .order("created_at", { ascending: true }).limit(200);
+      if (data) setCallHistory(data as CallEntry[]);
+    };
+    fetchCalls();
+
+    const channel = supabase
+      .channel("call-history-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "call_history" }, () => fetchCalls())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, partnerId]);
 
   // Realtime
   useEffect(() => {
@@ -422,15 +458,20 @@ const Chat = () => {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [searchIndex, searchResults]);
 
-  // Group messages by date
-  const groupedMessages: { date: string; msgs: DecryptedMessage[] }[] = [];
-  messages.forEach(msg => {
-    const date = new Date(msg.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    const last = groupedMessages[groupedMessages.length - 1];
+  // Merge messages and calls into timeline, grouped by date
+  const timeline: TimelineItem[] = [
+    ...messages.map(m => ({ type: "message" as const, data: m })),
+    ...callHistory.map(c => ({ type: "call" as const, data: c })),
+  ].sort((a, b) => new Date(a.data.created_at).getTime() - new Date(b.data.created_at).getTime());
+
+  const groupedTimeline: { date: string; items: TimelineItem[] }[] = [];
+  timeline.forEach(item => {
+    const date = new Date(item.data.created_at).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const last = groupedTimeline[groupedTimeline.length - 1];
     if (last?.date === date) {
-      last.msgs.push(msg);
+      last.items.push(item);
     } else {
-      groupedMessages.push({ date, msgs: [msg] });
+      groupedTimeline.push({ date, items: [item] });
     }
   });
 
@@ -560,7 +601,7 @@ const Chat = () => {
           backgroundSize: "cover", backgroundPosition: "center",
         } : undefined}
       >
-        {groupedMessages.map((group) => (
+        {groupedTimeline.map((group) => (
           <div key={group.date}>
             <div className="flex justify-center my-3">
               <span className="text-[10px] text-muted-foreground bg-muted/50 backdrop-blur-sm px-3 py-1 rounded-full">
@@ -568,7 +609,22 @@ const Chat = () => {
               </span>
             </div>
             <div className="space-y-1">
-              {group.msgs.map((msg) => {
+              {group.items.map((item) => {
+                if (item.type === "call") {
+                  const call = item.data;
+                  return (
+                    <CallEvent
+                      key={`call-${call.id}`}
+                      callType={call.call_type}
+                      status={call.status}
+                      direction={call.call_direction}
+                      durationSeconds={call.duration_seconds}
+                      createdAt={call.created_at}
+                      isMine={call.caller_id === user?.id}
+                    />
+                  );
+                }
+                const msg = item.data;
                 const repliedMsg = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
                 const isHighlighted = searchResults.includes(msg.id);
                 const isActiveResult = searchResults[searchIndex] === msg.id;
