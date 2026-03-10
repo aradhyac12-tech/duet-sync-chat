@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
-import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2 } from "lucide-react";
+import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -152,6 +152,7 @@ const Settings = () => {
     { key: "notifications" as const, icon: Bell, label: "Notifications", desc: "Message & call alerts" },
     { key: "hapticFeedback" as const, icon: Vibrate, label: "Haptics", desc: "Vibrate on interactions" },
     { key: "privacyMode" as const, icon: EyeOff, label: "Privacy", desc: "Blur in task switcher" },
+    { key: "peekGuard" as const, icon: Eye, label: "Peek Guard", desc: "Camera detects if someone is watching" },
   ];
 
   return (

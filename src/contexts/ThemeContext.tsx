@@ -7,6 +7,7 @@ interface AppSettings {
   notifications: boolean;
   hapticFeedback: boolean;
   privacyMode: boolean;
+  peekGuard: boolean;
 }
 
 interface ThemeContextType {
@@ -25,6 +26,7 @@ const defaultSettings: AppSettings = {
   notifications: true,
   hapticFeedback: true,
   privacyMode: false,
+  peekGuard: false,
 };
 
 const ThemeContext = createContext<ThemeContextType>({

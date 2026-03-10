@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import AppLayout from "@/components/AppLayout";
 import AppLockScreen from "@/components/AppLockScreen";
+import PeekGuard from "@/components/PeekGuard";
 import Auth from "@/pages/Auth";
 import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
@@ -50,7 +51,7 @@ const ProtectedRoutes = () => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 rounded-full bg-muted mx-auto flex items-center justify-center">
-            <span className="text-lg">💕</span>
+            <span className="text-sm font-semibold text-muted-foreground">DS</span>
           </div>
           <p className="text-xs text-muted-foreground animate-pulse">Loading...</p>
         </div>
@@ -90,6 +91,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PeekGuard />
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
