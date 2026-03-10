@@ -7,6 +7,7 @@ interface AppSettings {
   notifications: boolean;
   hapticFeedback: boolean;
   privacyMode: boolean;
+  peekGuard: boolean;
 }
 
 interface ThemeContextType {
