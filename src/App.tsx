@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import AppLayout from "@/components/AppLayout";
 import AppLockScreen from "@/components/AppLockScreen";
+import PeekGuard from "@/components/PeekGuard";
 import Auth from "@/pages/Auth";
 import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
