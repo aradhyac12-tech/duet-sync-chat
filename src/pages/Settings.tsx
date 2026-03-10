@@ -152,6 +152,7 @@ const Settings = () => {
     { key: "notifications" as const, icon: Bell, label: "Notifications", desc: "Message & call alerts" },
     { key: "hapticFeedback" as const, icon: Vibrate, label: "Haptics", desc: "Vibrate on interactions" },
     { key: "privacyMode" as const, icon: EyeOff, label: "Privacy", desc: "Blur in task switcher" },
+    { key: "peekGuard" as const, icon: Eye, label: "Peek Guard", desc: "Camera detects if someone is watching" },
   ];
 
   return (
