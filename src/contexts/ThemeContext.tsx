@@ -26,6 +26,7 @@ const defaultSettings: AppSettings = {
   notifications: true,
   hapticFeedback: true,
   privacyMode: false,
+  peekGuard: false,
 };
 
 const ThemeContext = createContext<ThemeContextType>({
