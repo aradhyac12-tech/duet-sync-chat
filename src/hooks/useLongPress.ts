@@ -13,7 +13,7 @@ export const useLongPress = (
       isLongPressRef.current = false;
       timerRef.current = setTimeout(() => {
         isLongPressRef.current = true;
-        triggerHaptic("medium");
+        hapticMedium();
         onLongPress();
       }, delay);
     },
