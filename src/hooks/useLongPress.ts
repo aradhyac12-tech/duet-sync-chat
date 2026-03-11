@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { triggerHaptic } from "@/lib/haptics";
+import { hapticMedium } from "@/lib/haptics";
 
 export const useLongPress = (
   onLongPress: () => void,
