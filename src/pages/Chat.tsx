@@ -965,6 +965,16 @@ const Chat = () => {
       {/* Overlays */}
       <AnimatePresence>{showGridMenu && <GridMenu onClose={() => setShowGridMenu(false)} />}</AnimatePresence>
       <AnimatePresence>{viewingPhoto && <PhotoViewer src={viewingPhoto} onClose={() => setViewingPhoto(null)} />}</AnimatePresence>
+      <MessageContextMenu
+        isOpen={!!contextMenuMsg}
+        onClose={() => setContextMenuMsg(null)}
+        onCopy={handleCopyMessage}
+        onDelete={handleDeleteMessage}
+        onForward={handleForwardMessage}
+        onReply={handleReplyFromMenu}
+        isMine={contextMenuMsg?.sender_id === user?.id}
+        messageContent={contextMenuMsg?.decryptedContent || null}
+      />
     </div>
   );
 };
