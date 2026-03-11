@@ -793,8 +793,6 @@ const Chat = () => {
                     formatTime={formatTime}
                   />
                 );
-                  </motion.div>
-                );
               })}
             </div>
           </div>
