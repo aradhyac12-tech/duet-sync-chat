@@ -784,55 +784,15 @@ const Chat = () => {
                 const isMine = msg.sender_id === user?.id;
                 const isDisappearing = !!msg.disappear_at && msg.disappear_at !== "pending";
                 return (
-                  <motion.div key={msg.id} id={`msg-${msg.id}`}
-                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: isDisappearing ? 0.6 : 1, y: 0 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className={`flex ${isMine ? "justify-end" : "justify-start"} group py-[2px] ${isActiveResult ? "ring-2 ring-primary rounded-2xl" : isHighlighted ? "ring-1 ring-primary/40 rounded-2xl" : ""}`}>
-                    <div className="flex items-end gap-1 max-w-[80%]">
-                      {isMine && (
-                        <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1">
-                          <Reply className="h-3 w-3" />
-                        </button>
-                      )}
-                      <div className={`rounded-2xl px-3 py-2 ${
-                        isMine
-                          ? "bg-foreground text-background rounded-br-md"
-                          : "bg-card border border-border/50 rounded-bl-md"
-                      } ${isDisappearing ? "ring-1 ring-primary/20" : ""}`}>
-                        {repliedMsg && (
-                          <QuotedMessage content={repliedMsg.decryptedContent || "Message"}
-                            senderName={repliedMsg.sender_id === user?.id ? "You" : partnerName} isMine={isMine} />
-                        )}
-                        {msg.message_type === "voice" && msg.file_url && <VoiceMessagePlayer src={msg.file_url} isMine={isMine} />}
-                        {msg.message_type === "image" && msg.file_url && (
-                          <img onClick={() => setViewingPhoto(msg.file_url!)} src={msg.file_url} alt="shared"
-                            className="rounded-xl mb-1 max-h-44 object-cover w-full cursor-pointer active:scale-[0.98] transition-transform" />
-                        )}
-                        {msg.message_type === "file" && msg.file_name && (
-                          <a href={msg.file_url || "#"} target="_blank" rel="noopener"
-                            className={`flex items-center gap-2 mb-1 rounded-lg px-2 py-1.5 ${isMine ? "bg-background/10" : "bg-muted/50"}`}>
-                            <FileText className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                            <span className="text-xs truncate">{msg.file_name}</span>
-                          </a>
-                        )}
-                        {msg.message_type !== "voice" && msg.decryptedContent && (
-                          <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{msg.decryptedContent}</p>
-                        )}
-                        <div className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end" : ""}`}>
-                          {isDisappearing && <Timer className="h-2.5 w-2.5 opacity-30" />}
-                          <span className={`text-[10px] ${isMine ? "text-background/40" : "text-muted-foreground/60"}`}>{formatTime(msg.created_at)}</span>
-                          {isMine && <MessageStatus isRead={msg.is_read} isMine={isMine} />}
-                        </div>
-                        <MessageReactions messageId={msg.id} userId={user?.id || ""} isMine={isMine} />
-                      </div>
-                      {!isMine && (
-                        <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
-                          className="h-6 w-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-muted-foreground hover:text-foreground mb-1">
-                          <Reply className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
+                  <MessageBubble key={msg.id} msg={msg} isMine={isMine} isDisappearing={isDisappearing}
+                    isHighlighted={isHighlighted} isActiveResult={isActiveResult}
+                    repliedMsg={repliedMsg} partnerName={partnerName} userId={user?.id || ""}
+                    onReply={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                    onLongPress={() => setContextMenuMsg(msg)}
+                    onPhotoView={(url) => setViewingPhoto(url)}
+                    formatTime={formatTime}
+                  />
+                );
                   </motion.div>
                 );
               })}
