@@ -500,6 +500,39 @@ const Chat = () => {
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const formatRecTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Context menu actions
+  const handleCopyMessage = useCallback(() => {
+    if (contextMenuMsg?.decryptedContent) {
+      navigator.clipboard.writeText(contextMenuMsg.decryptedContent);
+      toast({ title: "Copied" });
+    }
+    setContextMenuMsg(null);
+  }, [contextMenuMsg, toast]);
+
+  const handleDeleteMessage = useCallback(async () => {
+    if (!contextMenuMsg) return;
+    await supabase.from("messages").delete().eq("id", contextMenuMsg.id);
+    setMessages((prev) => prev.filter((m) => m.id !== contextMenuMsg.id));
+    setContextMenuMsg(null);
+    toast({ title: "Deleted" });
+  }, [contextMenuMsg, toast]);
+
+  const handleForwardMessage = useCallback(() => {
+    if (contextMenuMsg?.decryptedContent) {
+      navigator.clipboard.writeText(contextMenuMsg.decryptedContent);
+      toast({ title: "Message copied to clipboard for forwarding" });
+    }
+    setContextMenuMsg(null);
+  }, [contextMenuMsg, toast]);
+
+  const handleReplyFromMenu = useCallback(() => {
+    if (contextMenuMsg) {
+      setReplyTo(contextMenuMsg);
+      inputRef.current?.focus();
+    }
+    setContextMenuMsg(null);
+  }, [contextMenuMsg]);
+
   // Search logic
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); setSearchIndex(0); return; }
