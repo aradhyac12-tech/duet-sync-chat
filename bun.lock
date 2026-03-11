@@ -10,6 +10,7 @@
         "@capacitor/geolocation": "^8.1.0",
         "@capacitor/haptics": "^8.0.1",
         "@capacitor/push-notifications": "^8.0.2",
+        "@capawesome/capacitor-screen-orientation": "^8.0.1",
         "@daily-co/daily-js": "^0.87.0",
         "@hookform/resolvers": "^3.10.0",
         "@lovable.dev/cloud-auth-js": "^0.0.3",
@@ -110,6 +111,8 @@
     "@capacitor/push-notifications": ["@capacitor/push-notifications@8.0.2", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-mej8Eh4EU4JXbaeyMX2l+4NNK6IdY5iRsEXpBOTHLD29fuCACBP7kOJTiJv6piw134zdlbFH0rR+sDKHIiFOFg=="],
 
     "@capacitor/synapse": ["@capacitor/synapse@1.0.4", "", {}, "sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw=="],
+
+    "@capawesome/capacitor-screen-orientation": ["@capawesome/capacitor-screen-orientation@8.0.1", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-tTXhymMt88fQKrq7oUVRhk7eYqXROsQk2IcAgR1do8YgUSFTUOPOY2bxYMegKc0DWOYSXiO8UdT3T7lD0sdp6Q=="],
 
     "@daily-co/daily-js": ["@daily-co/daily-js@0.87.0", "", { "dependencies": { "@babel/runtime": "^7.12.5", "@sentry/browser": "^8.33.1", "bowser": "^2.8.1", "dequal": "^2.0.3", "events": "^3.1.0" } }, "sha512-hWHdBDvJwDeg8unz+XG9hD7xamuFi5Jmsk89ASATKL4fdTDHplpxi4PG9aaPXzBZYYLTjuxUje1K7B5uUR+gzw=="],
 
