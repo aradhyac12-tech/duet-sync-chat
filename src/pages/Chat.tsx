@@ -156,6 +156,7 @@ const Chat = () => {
   const { user } = useAuth();
   const { ready: e2eReady, encrypt, decrypt } = useE2E(user?.id, partnerId);
   const { toast } = useToast();
+  const [contextMenuMsg, setContextMenuMsg] = useState<DecryptedMessage | null>(null);
 
   // Daily.co call state
   const [isStartingCall, setIsStartingCall] = useState(false);
