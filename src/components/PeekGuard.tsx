@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldAlert, Eye, X } from "lucide-react";
+import { ShieldAlert, Eye } from "lucide-react";
 import { usePeekDetection } from "@/hooks/usePeekDetection";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useState, useEffect, useCallback } from "react";
+import { Capacitor } from "@capacitor/core";
 
 const PeekGuard = () => {
   const { appSettings } = useTheme();
@@ -11,6 +12,24 @@ const PeekGuard = () => {
   );
   const [dismissed, setDismissed] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
+
+  // Enable native privacy screen on Capacitor when peek guard is on
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const setupPrivacy = async () => {
+      try {
+        const { PrivacyScreen } = await import("@capacitor-community/privacy-screen");
+        if (appSettings.peekGuard || appSettings.privacyMode) {
+          await PrivacyScreen.enable();
+        } else {
+          await PrivacyScreen.disable();
+        }
+      } catch {
+        // Plugin not available
+      }
+    };
+    setupPrivacy();
+  }, [appSettings.peekGuard, appSettings.privacyMode]);
 
   // When peeking detected, show overlay
   useEffect(() => {
@@ -30,7 +49,6 @@ const PeekGuard = () => {
 
   const handleDismiss = useCallback(() => {
     setDismissed(true);
-    // Will auto-hide if faces go back to 1
   }, []);
 
   if (!appSettings.peekGuard || !showAlert) return null;
@@ -42,13 +60,9 @@ const PeekGuard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center"
-          style={{ backdropFilter: "blur(30px)", WebkitBackdropFilter: "blur(30px)" }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black"
         >
-          {/* Blur background */}
-          <div className="absolute inset-0 bg-background/95" />
-
           <motion.div
             initial={{ scale: 0.8, y: 20 }}
             animate={{ scale: 1, y: 0 }}
@@ -60,23 +74,23 @@ const PeekGuard = () => {
             <motion.div
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ repeat: Infinity, duration: 2 }}
-              className="mx-auto h-20 w-20 rounded-2xl bg-destructive/10 flex items-center justify-center"
+              className="mx-auto h-20 w-20 rounded-2xl bg-red-500/15 flex items-center justify-center"
             >
-              <ShieldAlert className="h-10 w-10 text-destructive" />
+              <ShieldAlert className="h-10 w-10 text-red-500" />
             </motion.div>
 
             {/* Text */}
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-foreground">
-                Someone may be watching
+              <h2 className="text-lg font-semibold text-white">
+                Someone is watching
               </h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Multiple faces detected ({facesDetected}). Screen content has been hidden for your privacy.
+              <p className="text-sm text-white/50 leading-relaxed">
+                {facesDetected} faces detected. Screen has been locked for your privacy.
               </p>
             </div>
 
             {/* Indicator */}
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 text-xs text-white/30">
               <Eye className="h-3.5 w-3.5" />
               <span>{facesDetected} face{facesDetected !== 1 ? "s" : ""} detected</span>
             </div>
@@ -84,7 +98,7 @@ const PeekGuard = () => {
             {/* Dismiss */}
             <button
               onClick={handleDismiss}
-              className="mt-4 px-6 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium transition-transform active:scale-95"
+              className="mt-4 px-6 py-2.5 rounded-xl bg-white text-black text-sm font-medium transition-transform active:scale-95"
             >
               It's just me — dismiss
             </button>
