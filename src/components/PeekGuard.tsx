@@ -2,18 +2,27 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ShieldAlert, Eye } from "lucide-react";
 import { usePeekDetection } from "@/hooks/usePeekDetection";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Capacitor } from "@capacitor/core";
+import { hapticHeavy } from "@/lib/haptics";
 
 const PeekGuard = () => {
   const { appSettings } = useTheme();
+  
+  const peekConfig = useMemo(() => ({
+    faceThreshold: appSettings.peekFaceThreshold ?? 2,
+    detectionDelay: appSettings.peekDetectionDelay ?? 1500,
+    checkInterval: appSettings.peekCheckInterval ?? 800,
+  }), [appSettings.peekFaceThreshold, appSettings.peekDetectionDelay, appSettings.peekCheckInterval]);
+
   const { isPeeking, isActive, facesDetected } = usePeekDetection(
-    appSettings.peekGuard ?? false
+    appSettings.peekGuard ?? false,
+    peekConfig
   );
   const [dismissed, setDismissed] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
 
-  // Enable native privacy screen on Capacitor when peek guard is on
+  // Enable native privacy screen on Capacitor
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const setupPrivacy = async () => {
@@ -31,11 +40,12 @@ const PeekGuard = () => {
     setupPrivacy();
   }, [appSettings.peekGuard, appSettings.privacyMode]);
 
-  // When peeking detected, show overlay
+  // When peeking detected, show overlay + haptic
   useEffect(() => {
     if (isPeeking) {
       setDismissed(false);
       setShowAlert(true);
+      hapticHeavy();
     }
   }, [isPeeking]);
 
@@ -60,47 +70,44 @@ const PeekGuard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: 0.1 }}
           className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black"
         >
           <motion.div
-            initial={{ scale: 0.8, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 10 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="relative z-10 text-center space-y-5 px-8 max-w-sm"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            className="relative z-10 text-center space-y-6 px-8 max-w-xs"
           >
-            {/* Icon */}
+            {/* Pulsing shield */}
             <motion.div
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-              className="mx-auto h-20 w-20 rounded-2xl bg-red-500/15 flex items-center justify-center"
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+              className="mx-auto h-16 w-16 rounded-2xl bg-red-500/10 flex items-center justify-center"
             >
-              <ShieldAlert className="h-10 w-10 text-red-500" />
+              <ShieldAlert className="h-8 w-8 text-red-500" />
             </motion.div>
 
-            {/* Text */}
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-white">
-                Someone is watching
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-white tracking-tight">
+                Privacy Alert
               </h2>
-              <p className="text-sm text-white/50 leading-relaxed">
-                {facesDetected} faces detected. Screen has been locked for your privacy.
+              <p className="text-xs text-white/40 leading-relaxed">
+                {facesDetected} {facesDetected === 1 ? "face" : "faces"} detected — screen locked
               </p>
             </div>
 
-            {/* Indicator */}
-            <div className="flex items-center justify-center gap-2 text-xs text-white/30">
-              <Eye className="h-3.5 w-3.5" />
-              <span>{facesDetected} face{facesDetected !== 1 ? "s" : ""} detected</span>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-white/20">
+              <Eye className="h-3 w-3" />
+              <span>Monitoring active</span>
             </div>
 
-            {/* Dismiss */}
             <button
               onClick={handleDismiss}
-              className="mt-4 px-6 py-2.5 rounded-xl bg-white text-black text-sm font-medium transition-transform active:scale-95"
+              className="mt-2 px-5 py-2 rounded-xl bg-white/10 text-white text-xs font-medium transition-all active:scale-95 active:bg-white/20"
             >
-              It's just me — dismiss
+              Dismiss
             </button>
           </motion.div>
         </motion.div>

@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+
+interface PeekConfig {
+  faceThreshold: number;
+  detectionDelay: number;
+  checkInterval: number;
+}
 
 interface UsePeekDetectionReturn {
   isPeeking: boolean;
@@ -9,7 +16,15 @@ interface UsePeekDetectionReturn {
   facesDetected: number;
 }
 
-export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
+/**
+ * Detects multiple faces using:
+ * - FaceDetector API (Chrome/Android WebView)
+ * - Canvas-based brightness heuristic as fallback (iOS/Safari)
+ */
+export const usePeekDetection = (
+  enabled: boolean,
+  config: PeekConfig = { faceThreshold: 2, detectionDelay: 1500, checkInterval: 800 }
+): UsePeekDetectionReturn => {
   const [isPeeking, setIsPeeking] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +36,12 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const peekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const configRef = useRef(config);
+  const useFallbackRef = useRef(false);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config.faceThreshold, config.detectionDelay, config.checkInterval]);
 
   const cleanup = useCallback(() => {
     if (intervalRef.current) {
@@ -48,49 +69,97 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
     setIsActive(false);
   }, []);
 
-  const detectFaces = useCallback(async () => {
-    if (!detectorRef.current || !videoRef.current || !canvasRef.current) return;
-
+  // Fallback detection for iOS: analyze frame variance to detect motion/extra presence
+  const detectWithFallback = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
-    if (video.readyState < 2) return; // not ready
+    if (video.readyState < 2) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Analyze skin-tone pixel regions as a proxy for face count
+    let skinPixels = 0;
+    const totalPixels = data.length / 4;
+    
+    for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      // Simple skin-tone detection in RGB space
+      if (r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15 && r - b > 15) {
+        skinPixels++;
+      }
+    }
+
+    const skinRatio = skinPixels / (totalPixels / 4);
+    // High skin ratio (>30%) suggests multiple faces close to camera
+    const estimatedFaces = skinRatio > 0.4 ? 3 : skinRatio > 0.25 ? 2 : 1;
+    
+    setFacesDetected(estimatedFaces);
+    const threshold = configRef.current.faceThreshold;
+
+    if (estimatedFaces >= threshold) {
+      if (!peekTimeoutRef.current) {
+        peekTimeoutRef.current = setTimeout(() => {
+          setIsPeeking(true);
+        }, configRef.current.detectionDelay);
+      }
+    } else {
+      if (peekTimeoutRef.current) {
+        clearTimeout(peekTimeoutRef.current);
+        peekTimeoutRef.current = null;
+      }
+    }
+  }, []);
+
+  const detectFaces = useCallback(async () => {
+    if (useFallbackRef.current) {
+      detectWithFallback();
+      return;
+    }
+
+    if (!detectorRef.current || !videoRef.current) return;
+    const video = videoRef.current;
+    if (video.readyState < 2) return;
 
     try {
-      // Use FaceDetector API (Chromium-based browsers)
       const faces = await detectorRef.current.detect(video);
       const count = faces.length;
       setFacesDetected(count);
+      const threshold = configRef.current.faceThreshold;
 
-      if (count > 1) {
-        // Multiple faces detected — someone is peeking
+      if (count >= threshold) {
         if (!peekTimeoutRef.current) {
-          // Require sustained detection (1.5s) to avoid false positives
           peekTimeoutRef.current = setTimeout(() => {
             setIsPeeking(true);
-          }, 1500);
+          }, configRef.current.detectionDelay);
         }
       } else {
-        // Clear pending peek detection
         if (peekTimeoutRef.current) {
           clearTimeout(peekTimeoutRef.current);
           peekTimeoutRef.current = null;
         }
       }
     } catch {
-      // FaceDetector might fail on some frames, ignore
+      // FaceDetector might fail on some frames
     }
-  }, []);
+  }, [detectWithFallback]);
 
   const start = useCallback(async () => {
     if (isActive) return;
     setError(null);
 
-    // Check if FaceDetector API is available
-    if (!("FaceDetector" in window)) {
-      // Fallback: use canvas-based simple brightness detection won't work well
-      // For now, set error for unsupported browsers
-      setError("Face detection not supported in this browser. Works best on Android/Chrome.");
-      return;
-    }
+    const hasFaceDetector = "FaceDetector" in window;
+    useFallbackRef.current = !hasFaceDetector;
 
     try {
       // Create hidden video element for camera
@@ -103,6 +172,7 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
       video.style.width = "1px";
       video.style.height = "1px";
       video.style.opacity = "0";
+      video.style.pointerEvents = "none";
       document.body.appendChild(video);
       videoRef.current = video;
 
@@ -125,15 +195,16 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
       video.srcObject = stream;
       await video.play();
 
-      // Initialize FaceDetector
-      // @ts-ignore - FaceDetector is not in TS types
-      detectorRef.current = new window.FaceDetector({
-        fastMode: true,
-        maxDetectedFaces: 5,
-      });
+      if (hasFaceDetector) {
+        // @ts-ignore - FaceDetector is not in TS types
+        detectorRef.current = new window.FaceDetector({
+          fastMode: true,
+          maxDetectedFaces: 5,
+        });
+      }
 
-      // Run detection every 800ms to save battery
-      intervalRef.current = setInterval(detectFaces, 800);
+      // Run detection at configured interval
+      intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
       setIsActive(true);
     } catch (err: any) {
       console.error("Peek detection error:", err);
@@ -159,6 +230,16 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
     return () => cleanup();
   }, [enabled]);
 
+  // Restart interval when checkInterval changes
+  useEffect(() => {
+    if (!isActive || !enabled) return;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(detectFaces, config.checkInterval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [config.checkInterval, isActive, enabled, detectFaces]);
+
   // Pause detection when tab is hidden to save battery
   useEffect(() => {
     if (!enabled) return;
@@ -169,7 +250,7 @@ export const usePeekDetection = (enabled: boolean): UsePeekDetectionReturn => {
           intervalRef.current = null;
         }
       } else if (isActive && !intervalRef.current) {
-        intervalRef.current = setInterval(detectFaces, 800);
+        intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
