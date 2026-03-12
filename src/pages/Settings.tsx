@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
-import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye } from "lucide-react";
+import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -9,6 +9,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Slider } from "@/components/ui/slider";
+import { hapticLight, hapticMedium } from "@/lib/haptics";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -40,6 +42,7 @@ const Settings = () => {
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [showPartnerDialog, setShowPartnerDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showPeekConfig, setShowPeekConfig] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [currentPartner, setCurrentPartner] = useState<string | null>(null);
@@ -65,6 +68,7 @@ const Settings = () => {
 
   const generateInviteLink = async () => {
     if (!user) return;
+    hapticMedium();
     const code = Math.random().toString(36).substring(2, 10).toUpperCase();
     const { error } = await supabase.from("invite_links").insert({
       code,
@@ -79,9 +83,10 @@ const Settings = () => {
   };
 
   const copyInviteLink = () => {
+    hapticLight();
     const link = `${window.location.origin}/auth?invite=${inviteCode}`;
     navigator.clipboard.writeText(link);
-    toast({ title: "Link copied! 📋", description: "Share this with your partner" });
+    toast({ title: "Link copied" });
   };
 
   const shareInviteLink = async () => {
@@ -95,9 +100,9 @@ const Settings = () => {
 
   const acceptInvite = async () => {
     if (!user || !joinCode.trim()) return;
+    hapticMedium();
     const code = joinCode.trim().toUpperCase();
 
-    // Find the invite
     const { data: invite } = await supabase
       .from("invite_links")
       .select("*")
@@ -115,11 +120,8 @@ const Settings = () => {
       return;
     }
 
-    // Link partners
     await supabase.from("profiles").update({ partner_id: invite.creator_id }).eq("user_id", user.id);
     await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", invite.creator_id);
-
-    // Mark invite as used
     await supabase.from("invite_links").update({ used_by: user.id, used_at: new Date().toISOString() } as any).eq("id", invite.id);
 
     setCurrentPartner(invite.creator_id);
@@ -128,11 +130,12 @@ const Settings = () => {
 
     setShowPartnerDialog(false);
     setJoinCode("");
-    toast({ title: "Connected! 💕", description: `You're now linked with ${pp?.display_name || "your partner"}` });
+    toast({ title: "Connected!", description: `Linked with ${pp?.display_name || "your partner"}` });
   };
 
   const unlinkPartner = async () => {
     if (!user || !currentPartner) return;
+    hapticMedium();
     await supabase.from("profiles").update({ partner_id: null }).eq("user_id", user.id);
     await supabase.from("profiles").update({ partner_id: null }).eq("user_id", currentPartner);
     setCurrentPartner(null);
@@ -142,17 +145,17 @@ const Settings = () => {
 
   const savePetName = async () => {
     if (!user || !currentPartner) return;
+    hapticLight();
     await supabase.from("profiles").update({ pet_name: petName.trim() || null }).eq("user_id", currentPartner);
     setEditingPetName(false);
-    toast({ title: "Saved 💕" });
+    toast({ title: "Saved" });
   };
 
   const settingsItems = [
-    { key: "biometricLock" as const, icon: Fingerprint, label: "App Lock", desc: "Require unlock when switching back" },
+    { key: "biometricLock" as const, icon: Fingerprint, label: "App Lock", desc: "Biometric unlock on resume" },
     { key: "notifications" as const, icon: Bell, label: "Notifications", desc: "Message & call alerts" },
     { key: "hapticFeedback" as const, icon: Vibrate, label: "Haptics", desc: "Vibrate on interactions" },
     { key: "privacyMode" as const, icon: EyeOff, label: "Privacy", desc: "Blur in task switcher" },
-    { key: "peekGuard" as const, icon: Eye, label: "Peek Guard", desc: "Camera detects if someone is watching" },
   ];
 
   return (
@@ -160,7 +163,7 @@ const Settings = () => {
       {/* Header */}
       <header className="safe-top px-5 pt-4 pb-3">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center">
+          <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform">
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
           <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
@@ -174,12 +177,12 @@ const Settings = () => {
           {currentPartner ? (
             <div className="space-y-2">
               <div className="bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-accent/50 flex items-center justify-center text-lg">💕</div>
+                <div className="h-10 w-10 rounded-full bg-accent/50 flex items-center justify-center text-sm font-semibold text-foreground">DS</div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{partnerName}</p>
                   <p className="text-[11px] text-muted-foreground">Connected</p>
                 </div>
-                <button onClick={unlinkPartner} className="h-7 px-3 rounded-full bg-muted text-[11px] flex items-center gap-1 text-muted-foreground">
+                <button onClick={unlinkPartner} className="h-7 px-3 rounded-full bg-muted text-[11px] flex items-center gap-1 text-muted-foreground active:scale-95 transition-transform">
                   <Unlink className="h-3 w-3" /> Unlink
                 </button>
               </div>
@@ -211,7 +214,7 @@ const Settings = () => {
                 </div>
               </button>
               <button onClick={() => setShowPartnerDialog(true)}
-                className="w-full bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-3 text-left">
+                className="w-full bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
                 <div className="h-10 w-10 rounded-full bg-accent/50 flex items-center justify-center">
                   <Share2 className="h-5 w-5 text-foreground" />
                 </div>
@@ -229,8 +232,8 @@ const Settings = () => {
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Theme</p>
           <div className="grid grid-cols-3 gap-2">
             {themes.map((t) => (
-              <button key={t.id} onClick={() => setTheme(t.id)}
-                className={cn("relative rounded-xl border-2 p-2.5 transition-all", theme === t.id ? "border-foreground" : "border-border/40")}>
+              <button key={t.id} onClick={() => { hapticLight(); setTheme(t.id); }}
+                className={cn("relative rounded-xl border-2 p-2.5 transition-all active:scale-95", theme === t.id ? "border-foreground" : "border-border/40")}>
                 <div className="flex gap-1 mb-1.5">
                   <div className={cn("h-5 w-5 rounded-md", t.preview)} />
                   <div className={cn("h-5 w-5 rounded-md", t.accent)} />
@@ -258,13 +261,13 @@ const Settings = () => {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {presetWallpapers.map((wp) => (
-              <button key={wp.id} onClick={() => setChatWallpaper(wp.style)}
-                className={cn("aspect-[3/4] rounded-xl border-2 transition-all", chatWallpaper === wp.style ? "border-foreground" : "border-border/30")}
+              <button key={wp.id} onClick={() => { hapticLight(); setChatWallpaper(wp.style); }}
+                className={cn("aspect-[3/4] rounded-xl border-2 transition-all active:scale-95", chatWallpaper === wp.style ? "border-foreground" : "border-border/30")}
                 style={{ background: wp.style }} />
             ))}
           </div>
           <button onClick={() => setShowWallpaperPicker(!showWallpaperPicker)}
-            className="mt-2 w-full flex items-center gap-2 bg-card rounded-xl border border-border/60 p-3 text-sm">
+            className="mt-2 w-full flex items-center gap-2 bg-card rounded-xl border border-border/60 p-3 text-sm active:scale-[0.98] transition-transform">
             <ImageIcon className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm">Custom image</span>
           </button>
@@ -289,7 +292,7 @@ const Settings = () => {
 
         {/* Privacy & Device */}
         <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Privacy</p>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Privacy & Device</p>
           <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
             {settingsItems.map((item) => (
               <div key={item.key} className="flex items-center gap-3 px-4 py-3">
@@ -299,8 +302,9 @@ const Settings = () => {
                   <p className="text-[11px] text-muted-foreground">{item.desc}</p>
                 </div>
                 <Switch
-                  checked={appSettings[item.key]}
+                  checked={appSettings[item.key] as boolean}
                   onCheckedChange={(val) => {
+                    hapticLight();
                     updateSetting(item.key, val);
                     toast({ title: `${item.label} ${val ? "on" : "off"}` });
                   }}
@@ -310,13 +314,102 @@ const Settings = () => {
           </div>
         </section>
 
+        {/* Peek Guard */}
+        <section>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Peek Guard</p>
+          <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
+            {/* Toggle */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Peek Guard</p>
+                <p className="text-[11px] text-muted-foreground">Camera-based face detection</p>
+              </div>
+              <Switch
+                checked={appSettings.peekGuard}
+                onCheckedChange={(val) => {
+                  hapticMedium();
+                  updateSetting("peekGuard", val);
+                  toast({ title: `Peek Guard ${val ? "enabled" : "disabled"}` });
+                }}
+              />
+            </div>
+
+            {/* Sensitivity config */}
+            {appSettings.peekGuard && (
+              <button
+                onClick={() => { hapticLight(); setShowPeekConfig(!showPeekConfig); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left"
+              >
+                <div className="h-4 w-4" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Sensitivity</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {appSettings.peekFaceThreshold} faces • {(appSettings.peekDetectionDelay / 1000).toFixed(1)}s delay
+                  </p>
+                </div>
+                <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", showPeekConfig && "rotate-90")} />
+              </button>
+            )}
+
+            {appSettings.peekGuard && showPeekConfig && (
+              <div className="px-4 py-4 space-y-5">
+                {/* Face threshold slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Face threshold</p>
+                    <span className="text-xs font-mono text-foreground">{appSettings.peekFaceThreshold}</span>
+                  </div>
+                  <Slider
+                    value={[appSettings.peekFaceThreshold]}
+                    onValueChange={([val]) => updateSetting("peekFaceThreshold", val)}
+                    min={2} max={5} step={1}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">Lock when this many faces are detected</p>
+                </div>
+
+                {/* Detection delay slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Detection delay</p>
+                    <span className="text-xs font-mono text-foreground">{(appSettings.peekDetectionDelay / 1000).toFixed(1)}s</span>
+                  </div>
+                  <Slider
+                    value={[appSettings.peekDetectionDelay]}
+                    onValueChange={([val]) => updateSetting("peekDetectionDelay", val)}
+                    min={500} max={5000} step={250}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">Wait time before locking (prevents false positives)</p>
+                </div>
+
+                {/* Check frequency slider */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Scan frequency</p>
+                    <span className="text-xs font-mono text-foreground">{appSettings.peekCheckInterval}ms</span>
+                  </div>
+                  <Slider
+                    value={[appSettings.peekCheckInterval]}
+                    onValueChange={([val]) => updateSetting("peekCheckInterval", val)}
+                    min={300} max={2000} step={100}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">Lower = faster detection but more battery usage</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Account */}
         <section className="pb-4">
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Account</p>
           <p className="text-xs text-muted-foreground mb-2">{user?.email}</p>
           <button
-            onClick={async () => { await supabase.auth.signOut(); }}
-            className="w-full bg-card rounded-xl border border-border/60 p-3 text-sm text-destructive text-center">
+            onClick={async () => { hapticMedium(); await supabase.auth.signOut(); }}
+            className="w-full bg-card rounded-xl border border-border/60 p-3 text-sm text-destructive text-center active:scale-[0.98] transition-transform">
             Sign Out
           </button>
         </section>

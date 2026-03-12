@@ -723,7 +723,7 @@ const Chat = () => {
               {partnerAvatar ? (
                 <img src={partnerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-sm">💕</span>
+                <span className="text-[10px] font-semibold text-muted-foreground">DS</span>
               )}
             </div>
             <div>

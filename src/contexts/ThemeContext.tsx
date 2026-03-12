@@ -8,6 +8,9 @@ interface AppSettings {
   hapticFeedback: boolean;
   privacyMode: boolean;
   peekGuard: boolean;
+  peekFaceThreshold: number;   // how many faces to trigger (2–5)
+  peekDetectionDelay: number;  // sustained detection ms (500–5000)
+  peekCheckInterval: number;   // detection interval ms (300–2000)
 }
 
 interface ThemeContextType {
@@ -16,7 +19,7 @@ interface ThemeContextType {
   chatWallpaper: string | null;
   setChatWallpaper: (wp: string | null) => void;
   appSettings: AppSettings;
-  updateSetting: (key: keyof AppSettings, value: boolean) => void;
+  updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
   isAppLocked: boolean;
   setIsAppLocked: (locked: boolean) => void;
 }
@@ -27,6 +30,9 @@ const defaultSettings: AppSettings = {
   hapticFeedback: true,
   privacyMode: false,
   peekGuard: false,
+  peekFaceThreshold: 2,
+  peekDetectionDelay: 1500,
+  peekCheckInterval: 800,
 };
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -189,7 +195,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     else localStorage.removeItem("duo-wallpaper");
   };
 
-  const updateSetting = (key: keyof AppSettings, value: boolean) => {
+  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setAppSettings((prev) => {
       const next = { ...prev, [key]: value };
       localStorage.setItem("duo-settings", JSON.stringify(next));
