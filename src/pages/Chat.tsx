@@ -717,7 +717,7 @@ const Chat = () => {
 
       {/* Header */}
       <header className="safe-top px-4 pt-3 pb-2.5 bg-background border-b border-border/40 sticky top-0 z-10">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center overflow-hidden">
               {partnerAvatar ? (
