@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import BottomNav from "@/components/BottomNav";
 
 const AppLayout = () => {
   return (
@@ -6,6 +7,7 @@ const AppLayout = () => {
       <main>
         <Outlet />
       </main>
+      <BottomNav />
     </div>
   );
 };
