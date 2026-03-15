@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Image, Phone, MapPin, Music, Heart, Settings, X } from "lucide-react";
+import { Image, Phone, MapPin, Music, Heart, Settings, X, BookOpen } from "lucide-react";
 import { hapticLight } from "@/lib/haptics";
 
 const items = [
@@ -8,6 +8,7 @@ const items = [
   { path: "/calls", icon: Phone, label: "Calls" },
   { path: "/map", icon: MapPin, label: "Map" },
   { path: "/playlist", icon: Music, label: "Music" },
+  { path: "/shayari", icon: BookOpen, label: "Shayari" },
   { path: "/us", icon: Heart, label: "Us" },
   { path: "/settings", icon: Settings, label: "Settings" },
 ];
