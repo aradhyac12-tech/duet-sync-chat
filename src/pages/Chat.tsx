@@ -453,6 +453,7 @@ const Chat = () => {
     const currentReplyTo = replyTo;
     setReplyTo(null);
     const encryptedText = e2eReady ? await encrypt(text) : text;
+    hapticMessageSent();
     const { error } = await supabase.from("messages").insert({
       sender_id: user.id, receiver_id: partnerId, content: encryptedText,
       message_type: "text", reply_to_id: currentReplyTo?.id || null,
