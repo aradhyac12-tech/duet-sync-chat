@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { playMessageSound, playCallSound } from "@/lib/sounds";
+import { hapticLight, hapticMedium, hapticMessageSent, hapticMessageReceived } from "@/lib/haptics";
 import { useAuth } from "@/hooks/useAuth";
 import { useE2E } from "@/hooks/useE2E";
 import { useDailyCall } from "@/hooks/useDailyCall";
