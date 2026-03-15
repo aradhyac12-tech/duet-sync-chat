@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import { playMessageSound, playCallSound } from "@/lib/sounds";
+import { hapticLight, hapticMedium, hapticMessageSent, hapticMessageReceived } from "@/lib/haptics";
 import { useAuth } from "@/hooks/useAuth";
 import { useE2E } from "@/hooks/useE2E";
 import { useDailyCall } from "@/hooks/useDailyCall";
@@ -300,7 +301,7 @@ const Chat = () => {
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
           const decryptedContent = msg.message_type === "text" ? await decrypt(msg.content) : msg.content;
           setMessages((prev) => [...prev, { ...msg, decryptedContent }]);
-          if (msg.sender_id !== user.id) playMessageSound();
+          if (msg.sender_id !== user.id) { playMessageSound(); hapticMessageReceived(); }
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
@@ -452,6 +453,7 @@ const Chat = () => {
     const currentReplyTo = replyTo;
     setReplyTo(null);
     const encryptedText = e2eReady ? await encrypt(text) : text;
+    hapticMessageSent();
     const { error } = await supabase.from("messages").insert({
       sender_id: user.id, receiver_id: partnerId, content: encryptedText,
       message_type: "text", reply_to_id: currentReplyTo?.id || null,

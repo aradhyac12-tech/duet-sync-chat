@@ -16,6 +16,9 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -61,6 +64,26 @@ const Auth = () => {
     setLoading(false);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        toast({ title: "Failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Reset link sent", description: "Check your email for the reset link." });
+        setShowForgot(false);
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    setForgotLoading(false);
+  };
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     try {
@@ -90,6 +113,34 @@ const Auth = () => {
     }
     setAppleLoading(false);
   };
+
+  // Forgot password overlay
+  if (showForgot) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-6">
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Reset Password</h1>
+            <p className="text-sm text-muted-foreground">Enter your email to receive a reset link</p>
+          </div>
+          <form onSubmit={handleForgotPassword} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="forgot-email" className="text-[11px] text-muted-foreground uppercase tracking-wider">Email</Label>
+              <Input id="forgot-email" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@example.com" className="h-11 rounded-xl bg-card border-border" required autoFocus />
+            </div>
+            <Button type="submit" disabled={forgotLoading}
+              className="w-full h-11 rounded-xl bg-foreground text-background hover:bg-foreground/90 text-sm font-medium">
+              {forgotLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Reset Link"}
+            </Button>
+          </form>
+          <button onClick={() => setShowForgot(false)} className="block mx-auto text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Back to Sign In
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
@@ -168,6 +219,10 @@ const Auth = () => {
                 className="w-full h-11 rounded-xl bg-foreground text-background hover:bg-foreground/90 text-sm font-medium">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
               </Button>
+              <button type="button" onClick={() => setShowForgot(true)}
+                className="block mx-auto text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Forgot password?
+              </button>
             </form>
           </TabsContent>
 

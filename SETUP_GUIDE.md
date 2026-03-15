@@ -4,6 +4,20 @@
 
 DuoSpace is a private couples app built with React + Vite + Capacitor. This guide covers everything needed to build and deploy the APK/IPA.
 
+## Email Integration (Resend)
+
+The app uses Resend for sending password reset and verification emails.
+- Backend function: `send-email` edge function
+- Secret: `RESEND_API_KEY` (configured in backend secrets)
+- Sends from: `noreply@resend.dev` (update to your domain in `send-email/index.ts`)
+
+## Password Reset Flow
+
+1. User taps "Forgot password?" on the login screen
+2. Enters their email → receives a reset link via Supabase Auth
+3. Link redirects to `/reset-password` where they set a new password
+4. Password updated via `supabase.auth.updateUser()`
+
 ---
 
 ## Prerequisites

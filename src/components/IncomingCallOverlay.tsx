@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { playCallSound } from "@/lib/sounds";
-import { hapticHeavy } from "@/lib/haptics";
+import { startCallVibration, stopCallVibration } from "@/lib/haptics";
 
 interface IncomingCall {
   id: string;
@@ -26,12 +26,14 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
 
   const handleAccept = useCallback(() => {
     if (!incomingCall?.room_name) return;
+    stopCallVibration();
     onAccept(incomingCall.room_name, incomingCall.call_type);
     setIncomingCall(null);
   }, [incomingCall, onAccept]);
 
   const handleDecline = useCallback(async () => {
     if (!incomingCall) return;
+    stopCallVibration();
     await supabase
       .from("call_history")
       .update({ status: "missed", ended_at: new Date().toISOString() } as any)
@@ -57,14 +59,14 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
           const call = payload.new as any;
           if (call.status !== "in_progress") return;
 
-          // Get caller info
           const { data: profile } = await supabase
             .from("profiles")
             .select("display_name, avatar_url, pet_name")
             .eq("user_id", call.caller_id)
             .single();
 
-          hapticHeavy();
+          // Start haptic vibration pattern + sound
+          startCallVibration();
           playCallSound();
 
           setIncomingCall({
@@ -79,7 +81,6 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
       )
       .subscribe();
 
-    // Also listen for call cancellations
     const cancelChannel = supabase
       .channel("call-cancel")
       .on(
@@ -93,7 +94,13 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
         (payload) => {
           const call = payload.new as any;
           if (call.status === "completed" || call.status === "missed" || call.status === "cancelled") {
-            setIncomingCall((prev) => (prev?.id === call.id ? null : prev));
+            setIncomingCall((prev) => {
+              if (prev?.id === call.id) {
+                stopCallVibration();
+                return null;
+              }
+              return prev;
+            });
           }
         }
       )
@@ -102,6 +109,7 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(cancelChannel);
+      stopCallVibration();
     };
   }, [user]);
 
@@ -123,7 +131,6 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[100] flex flex-col items-center justify-between bg-foreground/95 backdrop-blur-xl safe-top safe-bottom"
         >
-          {/* Caller info */}
           <div className="flex-1 flex flex-col items-center justify-center gap-6">
             <motion.div
               animate={{ scale: [1, 1.08, 1] }}
@@ -133,7 +140,9 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
               {incomingCall.callerAvatar ? (
                 <img src={incomingCall.callerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-5xl">💕</span>
+                <span className="text-4xl font-semibold text-background/60">
+                  {incomingCall.callerName.charAt(0).toUpperCase()}
+                </span>
               )}
             </motion.div>
 
@@ -146,7 +155,6 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
               </p>
             </div>
 
-            {/* Pulsing ring animation */}
             <div className="relative">
               <motion.div
                 animate={{ scale: [1, 1.5], opacity: [0.3, 0] }}
@@ -157,7 +165,6 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
             </div>
           </div>
 
-          {/* Accept / Decline */}
           <div className="pb-16 flex items-center gap-16">
             <div className="flex flex-col items-center gap-2">
               <motion.button
