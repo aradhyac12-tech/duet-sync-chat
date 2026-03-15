@@ -301,7 +301,7 @@ const Chat = () => {
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
           const decryptedContent = msg.message_type === "text" ? await decrypt(msg.content) : msg.content;
           setMessages((prev) => [...prev, { ...msg, decryptedContent }]);
-          if (msg.sender_id !== user.id) playMessageSound();
+          if (msg.sender_id !== user.id) { playMessageSound(); hapticMessageReceived(); }
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
