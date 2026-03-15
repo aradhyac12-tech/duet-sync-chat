@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Image, Phone, MapPin, Music, Heart, Settings, X } from "lucide-react";
+import { hapticLight } from "@/lib/haptics";
 
 const items = [
   { path: "/gallery", icon: Image, label: "Gallery" },
@@ -33,6 +34,7 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
         </button>
       </div>
       <div className="px-6 pt-6" onClick={(e) => e.stopPropagation()}>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4 px-1">Navigate</p>
         <div className="grid grid-cols-3 gap-3">
           {items.map((item, i) => {
             const Icon = item.icon;
@@ -42,7 +44,7 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03, duration: 0.15 }}
-                onClick={() => { navigate(item.path); onClose(); }}
+                onClick={() => { hapticLight(); navigate(item.path); onClose(); }}
                 className="flex flex-col items-center gap-2 py-5 rounded-2xl bg-card border border-border/30 active:scale-95 transition-transform"
               >
                 <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
