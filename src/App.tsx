@@ -15,6 +15,7 @@ import Chat from "@/pages/Chat";
 import Gallery from "@/pages/Gallery";
 import Calls from "@/pages/Calls";
 import Playlist from "@/pages/Playlist";
+import Shayari from "@/pages/Shayari";
 import MapView from "@/pages/MapView";
 import Us from "@/pages/Us";
 import Settings from "@/pages/Settings";
@@ -104,6 +105,7 @@ const App = () => (
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/calls" element={<Calls />} />
               <Route path="/playlist" element={<Playlist />} />
+              <Route path="/shayari" element={<Shayari />} />
               <Route path="/map" element={<MapView />} />
               <Route path="/us" element={<Us />} />
               <Route path="/settings" element={<Settings />} />

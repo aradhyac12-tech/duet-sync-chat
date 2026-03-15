@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      blend_invites: {
+        Row: {
+          created_at: string
+          id: string
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sender_id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       call_history: {
         Row: {
           call_direction: string
@@ -372,6 +393,30 @@ export type Database = {
           phone_number?: string | null
           public_key?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      shayaris: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          title?: string | null
           user_id?: string
         }
         Relationships: []
