@@ -9,6 +9,7 @@ import AppLayout from "@/components/AppLayout";
 import AppLockScreen from "@/components/AppLockScreen";
 import PeekGuard from "@/components/PeekGuard";
 import Auth from "@/pages/Auth";
+import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
 import Gallery from "@/pages/Gallery";
@@ -95,6 +96,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route path="/index" element={<Navigate to="/chat" replace />} />
             <Route element={<ProtectedRoutes />}>
