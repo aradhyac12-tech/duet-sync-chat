@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           name: roomName || `duo-${Date.now()}`,
           properties: {
-            exp: Math.floor(Date.now() / 1000) + 18000, // 5 hours
+            exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 days (effectively unlimited)
             enable_chat: false,
             enable_knocking: false,
             max_participants: 2,
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           properties: {
             room_name: roomName,
-            exp: Math.floor(Date.now() / 1000) + 18000, // 5 hours
+            exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 days (effectively unlimited)
             is_owner: true,
             enable_recording: false,
             enable_screenshare: true,

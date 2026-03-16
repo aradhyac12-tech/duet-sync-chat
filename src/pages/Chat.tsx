@@ -483,10 +483,41 @@ const Chat = () => {
 
   const clearChat = async () => {
     if (!user || !partnerId) return;
-    await supabase.from("messages").delete()
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`);
+    // Soft-delete: mark messages as deleted by this user instead of hard deleting
+    const myMessages = messages.filter(m => m.sender_id === user.id);
+    const partnerMessages = messages.filter(m => m.sender_id === partnerId);
+    
+    if (myMessages.length > 0) {
+      await supabase.from("messages").update({ deleted_by_sender: true } as any)
+        .in("id", myMessages.map(m => m.id));
+    }
+    if (partnerMessages.length > 0) {
+      await supabase.from("messages").update({ deleted_by_receiver: true } as any)
+        .in("id", partnerMessages.map(m => m.id));
+    }
     setMessages([]);
     setShowClearDialog(false);
+    toast({ title: "Chat cleared", description: "Your partner can still recover these messages" });
+  };
+
+  const recoverChat = async () => {
+    if (!user || !partnerId) return;
+    // Recover messages that were soft-deleted by this user
+    await supabase.from("messages").update({ deleted_by_sender: false, deleted_by_receiver: false } as any)
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`);
+    
+    // Re-fetch messages
+    const { data } = await supabase
+      .from("messages").select("*")
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+      .order("created_at", { ascending: true }).limit(200);
+    if (data) {
+      const now = new Date();
+      const valid = (data as Message[]).filter(m => !m.disappear_at || new Date(m.disappear_at) > now);
+      const decrypted = await decryptMessages(valid);
+      setMessages(decrypted);
+    }
+    toast({ title: "Chat recovered! 💬" });
   };
 
   // === Daily.co calling ===
@@ -771,6 +802,9 @@ const Chat = () => {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={recoverChat}>
+                  <Reply className="h-4 w-4 mr-2.5" /> Recover chat
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-4 w-4 mr-2.5" /> Clear chat
                 </DropdownMenuItem>
@@ -955,7 +989,7 @@ const Chat = () => {
         <AlertDialogContent className="rounded-2xl max-w-[320px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm font-semibold">Clear chat?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">All messages will be permanently deleted.</AlertDialogDescription>
+            <AlertDialogDescription className="text-xs">Messages will be hidden for you. Your partner can still see and recover them.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-full text-xs h-8">Cancel</AlertDialogCancel>

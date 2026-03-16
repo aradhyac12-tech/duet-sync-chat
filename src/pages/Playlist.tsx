@@ -93,6 +93,8 @@ const Playlist = () => {
 
   const blendChannelRef = useRef<any>(null);
 
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
   const currentSong = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null;
 
   // Load songs and profiles
@@ -230,6 +232,9 @@ const Playlist = () => {
     }
   }, [shuffleOn, songs]);
 
+
+
+
   const playSong = (song: Song) => {
     hapticLight();
     const idx = queue.findIndex((s) => s.id === song.id);
@@ -273,6 +278,34 @@ const Playlist = () => {
     setIsPlaying(true);
     broadcastPlayback("skip", queue[prev]?.id);
   };
+
+  // Media Session API for notification panel controls
+  useEffect(() => {
+    if (!currentSong || !("mediaSession" in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentSong.title,
+      artist: currentSong.artist,
+      album: "DuoSpace Playlist",
+      artwork: currentSong.thumbnail_url
+        ? [{ src: currentSong.thumbnail_url, sizes: "256x256", type: "image/jpeg" }]
+        : [],
+    });
+
+    navigator.mediaSession.setActionHandler("play", () => { setIsPlaying(true); broadcastPlayback("play", currentSong?.id); });
+    navigator.mediaSession.setActionHandler("pause", () => { setIsPlaying(false); broadcastPlayback("pause", currentSong?.id); });
+    navigator.mediaSession.setActionHandler("previoustrack", playPrev);
+    navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+    };
+  }, [currentSong, isPlaying, broadcastPlayback, playNext, playPrev]);
 
   const toggleShuffle = () => {
     hapticLight();

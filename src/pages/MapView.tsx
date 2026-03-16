@@ -1,10 +1,12 @@
 import PageHeader from "@/components/PageHeader";
 import { motion } from "framer-motion";
-import { MapPin, Navigation, AlertCircle, Layers } from "lucide-react";
+import { MapPin, Navigation, AlertCircle, Layers, Radio, MousePointerClick } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { hapticLight } from "@/lib/haptics";
 import "leaflet/dist/leaflet.css";
 
 const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -51,22 +53,24 @@ const MapView = () => {
   const [permissionState, setPermissionState] = useState<"prompt" | "granted" | "denied" | "unknown">("unknown");
   const [mapStyle, setMapStyle] = useState<MapStyle>("street");
   const [initialZoomDone, setInitialZoomDone] = useState(false);
+  const [locationMode, setLocationMode] = useState<"persistent" | "on_open">("on_open");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const lineRef = useRef<any>(null);
 
-  // Get partner
+  // Get partner + location mode
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("partner_id").eq("user_id", user.id).single()
+    supabase.from("profiles").select("partner_id, location_mode").eq("user_id", user.id).single()
       .then(({ data }) => {
         if (data?.partner_id) {
           setPartnerId(data.partner_id);
           supabase.from("profiles").select("display_name").eq("user_id", data.partner_id).single()
             .then(({ data: pp }) => { if (pp) setPartnerName(pp.display_name); });
         }
+        if (data?.location_mode) setLocationMode(data.location_mode as any);
       });
   }, [user]);
 
@@ -299,6 +303,34 @@ const MapView = () => {
       </div>
 
       <div className="px-5 pb-24 space-y-3">
+        {/* Location mode toggle */}
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-xs font-medium">Location Sharing Mode</p>
+              <p className="text-[10px] text-muted-foreground">
+                {locationMode === "persistent" ? "Always sharing in background" : "Share only when app is open"}
+              </p>
+            </div>
+            <Switch
+              checked={locationMode === "persistent"}
+              onCheckedChange={(val) => {
+                hapticLight();
+                const mode = val ? "persistent" : "on_open";
+                setLocationMode(mode);
+                if (user) {
+                  supabase.from("profiles").update({ location_mode: mode } as any).eq("user_id", user.id);
+                }
+                toast({ title: val ? "Persistent sharing on" : "Sharing only when open" });
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            {locationMode === "persistent" ? <Radio className="h-3 w-3 text-primary" /> : <MousePointerClick className="h-3 w-3" />}
+            <span>{locationMode === "persistent" ? "Background GPS active" : "GPS active when in app"}</span>
+          </div>
+        </div>
+
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>

@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
-import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight } from "lucide-react";
+import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight, Palette, Download, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -400,6 +400,45 @@ const Settings = () => {
                 </div>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Data & Backup */}
+        <section>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Data & Backup</p>
+          <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Cloud Sync</p>
+                <p className="text-[11px] text-muted-foreground">All data auto-syncs to cloud. Just log in on any device to restore.</p>
+              </div>
+              <div className="h-2 w-2 rounded-full bg-primary" />
+            </div>
+            <div className="flex items-center gap-3 px-4 py-3">
+              <RotateCcw className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Chat Recovery</p>
+                <p className="text-[11px] text-muted-foreground">Deleted chats can be recovered by either partner from the chat menu.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Customization */}
+        <section>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">App Name</p>
+          <div className="bg-card rounded-2xl border border-border/60 p-4">
+            <p className="text-[11px] text-muted-foreground mb-2">Display name (in-app only)</p>
+            <Input
+              defaultValue={localStorage.getItem("duo-app-name") || "DuoSpace"}
+              onBlur={(e) => {
+                localStorage.setItem("duo-app-name", e.target.value.trim() || "DuoSpace");
+                toast({ title: "App name updated" });
+              }}
+              placeholder="DuoSpace"
+              className="h-8 rounded-full text-sm"
+            />
           </div>
         </section>
 
