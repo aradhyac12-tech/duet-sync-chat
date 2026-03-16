@@ -264,6 +264,8 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          deleted_by_receiver: boolean
+          deleted_by_sender: boolean
           disappear_at: string | null
           file_name: string | null
           file_url: string | null
@@ -277,6 +279,8 @@ export type Database = {
         Insert: {
           content?: string | null
           created_at?: string
+          deleted_by_receiver?: boolean
+          deleted_by_sender?: boolean
           disappear_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -290,6 +294,8 @@ export type Database = {
         Update: {
           content?: string | null
           created_at?: string
+          deleted_by_receiver?: boolean
+          deleted_by_sender?: boolean
           disappear_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -351,6 +357,7 @@ export type Database = {
           gallery_shared: boolean
           gender: string | null
           id: string
+          location_mode: string
           mood_emoji: string | null
           mood_text: string | null
           mood_updated_at: string | null
@@ -368,6 +375,7 @@ export type Database = {
           gallery_shared?: boolean
           gender?: string | null
           id?: string
+          location_mode?: string
           mood_emoji?: string | null
           mood_text?: string | null
           mood_updated_at?: string | null
@@ -385,6 +393,7 @@ export type Database = {
           gallery_shared?: boolean
           gender?: string | null
           id?: string
+          location_mode?: string
           mood_emoji?: string | null
           mood_text?: string | null
           mood_updated_at?: string | null
