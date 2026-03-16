@@ -53,6 +53,7 @@ const MapView = () => {
   const [permissionState, setPermissionState] = useState<"prompt" | "granted" | "denied" | "unknown">("unknown");
   const [mapStyle, setMapStyle] = useState<MapStyle>("street");
   const [initialZoomDone, setInitialZoomDone] = useState(false);
+  const [locationMode, setLocationMode] = useState<"persistent" | "on_open">("on_open");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
