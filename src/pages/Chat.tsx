@@ -802,6 +802,9 @@ const Chat = () => {
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={recoverChat}>
+                  <Reply className="h-4 w-4 mr-2.5" /> Recover chat
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowClearDialog(true)} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-4 w-4 mr-2.5" /> Clear chat
                 </DropdownMenuItem>
