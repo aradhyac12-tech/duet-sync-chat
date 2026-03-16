@@ -260,7 +260,7 @@ cd android
 ### Video/Voice Calls
 - Powered by Daily.co via edge functions
 - Supports HD video, screen sharing, adaptive bitrate
-- Up to 5-hour call duration
+- Unlimited call duration (7-day room expiry, auto-renewed)
 - Draggable PiP (picture-in-picture) for local video
 
 ### Haptic Feedback
