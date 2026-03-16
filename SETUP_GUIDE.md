@@ -104,7 +104,7 @@ All plugins are already installed in `package.json`. Here's what each does:
 Add to `android/app/src/main/AndroidManifest.xml`:
 
 ```xml
-<!-- Camera for Peek Guard -->
+<!-- Camera for Peek Guard & Photo/Video capture -->
 <uses-permission android:name="android.permission.CAMERA" />
 <uses-feature android:name="android.hardware.camera" android:required="false" />
 <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -113,22 +113,37 @@ Add to `android/app/src/main/AndroidManifest.xml`:
 <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 
-<!-- Location for Map -->
+<!-- Location for Map (foreground + background) -->
 <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
 <!-- Push Notifications -->
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-<!-- Microphone for calls -->
+<!-- Microphone for calls & voice messages -->
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
 <!-- Haptics -->
 <uses-permission android:name="android.permission.VIBRATE" />
 
-<!-- Internet -->
+<!-- Internet & Network -->
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+<!-- Storage for gallery imports -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+<!-- Foreground service for music & location -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+<!-- Wake lock for background music -->
+<uses-permission android:name="android.permission.WAKE_LOCK" />
 ```
 
 ### iOS Permissions
@@ -136,17 +151,32 @@ Add to `android/app/src/main/AndroidManifest.xml`:
 Add to `ios/App/App/Info.plist`:
 
 ```xml
-<!-- Camera for Peek Guard -->
+<!-- Camera for Peek Guard & capture -->
 <key>NSCameraUsageDescription</key>
-<string>DuoSpace uses the camera to detect if someone is looking over your shoulder</string>
+<string>DuoSpace uses the camera to detect if someone is looking over your shoulder and for capturing photos</string>
 
-<!-- Microphone for calls -->
+<!-- Microphone for calls & voice messages -->
 <key>NSMicrophoneUsageDescription</key>
 <string>DuoSpace needs microphone access for voice and video calls</string>
 
-<!-- Location for Map -->
+<!-- Location (foreground) -->
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>DuoSpace shows your location on the shared map</string>
+
+<!-- Location (background - persistent mode) -->
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>DuoSpace can share your location with your partner even when the app is in the background</string>
+<key>NSLocationAlwaysUsageDescription</key>
+<string>DuoSpace shares your location continuously with your partner</string>
+
+<!-- Background modes -->
+<key>UIBackgroundModes</key>
+<array>
+    <string>audio</string>
+    <string>location</string>
+    <string>fetch</string>
+    <string>remote-notification</string>
+</array>
 
 <!-- FaceID -->
 <key>NSFaceIDUsageDescription</key>
@@ -155,6 +185,10 @@ Add to `ios/App/App/Info.plist`:
 <!-- Photo Library -->
 <key>NSPhotoLibraryUsageDescription</key>
 <string>DuoSpace needs access to save and share photos</string>
+
+<!-- Photo Library Add -->
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>DuoSpace saves photos to your camera roll</string>
 ```
 
 ---
