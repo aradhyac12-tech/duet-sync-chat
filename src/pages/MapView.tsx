@@ -1,10 +1,12 @@
 import PageHeader from "@/components/PageHeader";
 import { motion } from "framer-motion";
-import { MapPin, Navigation, AlertCircle, Layers } from "lucide-react";
+import { MapPin, Navigation, AlertCircle, Layers, Radio, MousePointerClick } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { hapticLight } from "@/lib/haptics";
 import "leaflet/dist/leaflet.css";
 
 const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
