@@ -307,7 +307,7 @@ const Playlist = () => {
     };
   }, [currentSong, isPlaying, broadcastPlayback, playNext, playPrev]);
 
-
+  const toggleShuffle = () => {
     hapticLight();
     setShuffleOn(!shuffleOn);
   };
