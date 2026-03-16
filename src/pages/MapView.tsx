@@ -303,6 +303,34 @@ const MapView = () => {
       </div>
 
       <div className="px-5 pb-24 space-y-3">
+        {/* Location mode toggle */}
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-xs font-medium">Location Sharing Mode</p>
+              <p className="text-[10px] text-muted-foreground">
+                {locationMode === "persistent" ? "Always sharing in background" : "Share only when app is open"}
+              </p>
+            </div>
+            <Switch
+              checked={locationMode === "persistent"}
+              onCheckedChange={(val) => {
+                hapticLight();
+                const mode = val ? "persistent" : "on_open";
+                setLocationMode(mode);
+                if (user) {
+                  supabase.from("profiles").update({ location_mode: mode } as any).eq("user_id", user.id);
+                }
+                toast({ title: val ? "Persistent sharing on" : "Sharing only when open" });
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+            {locationMode === "persistent" ? <Radio className="h-3 w-3 text-primary" /> : <MousePointerClick className="h-3 w-3" />}
+            <span>{locationMode === "persistent" ? "Background GPS active" : "GPS active when in app"}</span>
+          </div>
+        </div>
+
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
