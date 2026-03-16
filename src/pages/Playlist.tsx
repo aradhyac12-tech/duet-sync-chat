@@ -232,33 +232,8 @@ const Playlist = () => {
     }
   }, [shuffleOn, songs]);
 
-  // Media Session API for notification panel controls
-  useEffect(() => {
-    if (!currentSong || !("mediaSession" in navigator)) return;
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentSong.title,
-      artist: currentSong.artist,
-      album: "DuoSpace Playlist",
-      artwork: currentSong.thumbnail_url
-        ? [{ src: currentSong.thumbnail_url, sizes: "256x256", type: "image/jpeg" }]
-        : [],
-    });
 
-    navigator.mediaSession.setActionHandler("play", () => { setIsPlaying(true); broadcastPlayback("play", currentSong?.id); });
-    navigator.mediaSession.setActionHandler("pause", () => { setIsPlaying(false); broadcastPlayback("pause", currentSong?.id); });
-    navigator.mediaSession.setActionHandler("previoustrack", playPrev);
-    navigator.mediaSession.setActionHandler("nexttrack", () => playNext());
-
-    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-
-    return () => {
-      navigator.mediaSession.setActionHandler("play", null);
-      navigator.mediaSession.setActionHandler("pause", null);
-      navigator.mediaSession.setActionHandler("previoustrack", null);
-      navigator.mediaSession.setActionHandler("nexttrack", null);
-    };
-  }, [currentSong, isPlaying, broadcastPlayback, playNext]);
 
   const playSong = (song: Song) => {
     hapticLight();
