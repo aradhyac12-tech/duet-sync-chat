@@ -60,16 +60,17 @@ const MapView = () => {
   const markersRef = useRef<any[]>([]);
   const lineRef = useRef<any>(null);
 
-  // Get partner
+  // Get partner + location mode
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("partner_id").eq("user_id", user.id).single()
+    supabase.from("profiles").select("partner_id, location_mode").eq("user_id", user.id).single()
       .then(({ data }) => {
         if (data?.partner_id) {
           setPartnerId(data.partner_id);
           supabase.from("profiles").select("display_name").eq("user_id", data.partner_id).single()
             .then(({ data: pp }) => { if (pp) setPartnerName(pp.display_name); });
         }
+        if (data?.location_mode) setLocationMode(data.location_mode as any);
       });
   }, [user]);
 
