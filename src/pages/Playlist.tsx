@@ -93,6 +93,8 @@ const Playlist = () => {
 
   const blendChannelRef = useRef<any>(null);
 
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
   const currentSong = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null;
 
   // Load songs and profiles
