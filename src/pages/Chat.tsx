@@ -989,7 +989,7 @@ const Chat = () => {
         <AlertDialogContent className="rounded-2xl max-w-[320px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-sm font-semibold">Clear chat?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">All messages will be permanently deleted.</AlertDialogDescription>
+            <AlertDialogDescription className="text-xs">Messages will be hidden for you. Your partner can still see and recover them.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-full text-xs h-8">Cancel</AlertDialogCancel>
