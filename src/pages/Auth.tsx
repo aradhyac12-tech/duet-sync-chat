@@ -149,6 +149,18 @@ const Auth = () => {
     setAppleLoading(false);
   };
 
+  // OAuth processing state
+  if (oauthProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Completing sign in...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Forgot password overlay
   if (showForgot) {
     return (
