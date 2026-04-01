@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
 import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight, Palette, Download, RotateCcw } from "lucide-react";
+import CodeSurpriseEditor from "@/components/CodeSurpriseEditor";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
