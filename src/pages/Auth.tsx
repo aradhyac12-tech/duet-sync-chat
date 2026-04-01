@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
@@ -19,7 +19,42 @@ const Auth = () => {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [oauthProcessing, setOauthProcessing] = useState(false);
   const { toast } = useToast();
+
+  // Handle OAuth callback - check for hash fragments or query params indicating a callback
+  useEffect(() => {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    
+    // Check if this is an OAuth callback (has access_token in hash or error)
+    if (hash.includes("access_token") || hash.includes("error_description") || params.get("error")) {
+      setOauthProcessing(true);
+      
+      if (hash.includes("error_description")) {
+        const errorDesc = decodeURIComponent(hash.split("error_description=")[1]?.split("&")[0] || "Authentication failed");
+        toast({ title: "Sign in failed", description: errorDesc, variant: "destructive" });
+        setOauthProcessing(false);
+        // Clean URL
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+
+      if (params.get("error")) {
+        toast({ title: "Sign in failed", description: params.get("error_description") || "Authentication failed", variant: "destructive" });
+        setOauthProcessing(false);
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+
+      // The supabase client should pick up the hash automatically
+      // Give it a moment to process
+      const timer = setTimeout(() => {
+        setOauthProcessing(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +148,18 @@ const Auth = () => {
     }
     setAppleLoading(false);
   };
+
+  // OAuth processing state
+  if (oauthProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Completing sign in...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Forgot password overlay
   if (showForgot) {

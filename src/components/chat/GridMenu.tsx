@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Image, Phone, MapPin, Music, Heart, Settings, X, BookOpen } from "lucide-react";
 import { hapticLight } from "@/lib/haptics";
+import { useState } from "react";
 
 const items = [
   { path: "/gallery", icon: Image, label: "Gallery" },
@@ -58,6 +59,46 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
         </div>
       </div>
     </motion.div>
+  );
+};
+
+// Animated Hub Button with clockwise/anticlockwise rotation
+export const HubButton = ({ onClick, isOpen }: { onClick: () => void; isOpen: boolean }) => {
+  return (
+    <motion.button
+      onClick={() => { hapticLight(); onClick(); }}
+      animate={{ rotate: isOpen ? 135 : 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+    >
+      <motion.div
+        className="relative h-4 w-4"
+        animate={{ rotate: isOpen ? 45 : 0 }}
+        transition={{ type: "spring", stiffness: 200, damping: 15 }}
+      >
+        {/* 4-dot grid icon that morphs to X */}
+        <motion.span
+          className="absolute top-0 left-0 h-1.5 w-1.5 rounded-full bg-current"
+          animate={isOpen ? { x: 3, y: 3 } : { x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        />
+        <motion.span
+          className="absolute top-0 right-0 h-1.5 w-1.5 rounded-full bg-current"
+          animate={isOpen ? { x: -3, y: 3 } : { x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        />
+        <motion.span
+          className="absolute bottom-0 left-0 h-1.5 w-1.5 rounded-full bg-current"
+          animate={isOpen ? { x: 3, y: -3 } : { x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        />
+        <motion.span
+          className="absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full bg-current"
+          animate={isOpen ? { x: -3, y: -3 } : { x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        />
+      </motion.div>
+    </motion.button>
   );
 };
 

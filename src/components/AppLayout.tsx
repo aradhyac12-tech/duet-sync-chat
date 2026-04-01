@@ -1,4 +1,6 @@
 import { Outlet } from "react-router-dom";
+import SurpriseOverlay from "@/components/SurpriseOverlay";
+import MoodDetector from "@/components/MoodDetector";
 
 const AppLayout = () => {
   return (
@@ -6,6 +8,8 @@ const AppLayout = () => {
       <main>
         <Outlet />
       </main>
+      <SurpriseOverlay />
+      <MoodDetector />
     </div>
   );
 };

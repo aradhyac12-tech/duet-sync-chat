@@ -6,7 +6,7 @@ import TypingIndicator from "@/components/chat/TypingIndicator";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
 import PhotoViewer from "@/components/chat/PhotoViewer";
-import GridMenu from "@/components/chat/GridMenu";
+import GridMenu, { HubButton } from "@/components/chat/GridMenu";
 import CallEvent from "@/components/chat/CallEvent";
 import MessageContextMenu from "@/components/chat/MessageContextMenu";
 import IncomingCallOverlay from "@/components/IncomingCallOverlay";
@@ -974,10 +974,7 @@ const Chat = () => {
                 <Mic className="h-4 w-4 text-background" />
               </button>
             )}
-            <button onClick={() => setShowGridMenu(true)}
-              className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-              <LayoutGrid className="h-4 w-4" />
-            </button>
+            <HubButton onClick={() => setShowGridMenu(!showGridMenu)} isOpen={showGridMenu} />
           </div>
         )}
       </div>
