@@ -1,0 +1,243 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Camera, X, Smile, Frown, Meh, Heart, Angry } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { hapticLight } from "@/lib/haptics";
+
+const MOOD_KEY = "last-mood-check-date";
+
+const moods = [
+  { emoji: "😊", label: "Happy", icon: Smile, color: "text-green-500" },
+  { emoji: "😢", label: "Sad", icon: Frown, color: "text-blue-500" },
+  { emoji: "😐", label: "Neutral", icon: Meh, color: "text-yellow-500" },
+  { emoji: "😍", label: "Loving", icon: Heart, color: "text-pink-500" },
+  { emoji: "😤", label: "Frustrated", icon: Angry, color: "text-red-500" },
+];
+
+const MoodDetector = () => {
+  const { user } = useAuth();
+  const [show, setShow] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectedMood, setDetectedMood] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(5);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Check if we need to show mood detection today
+  useEffect(() => {
+    if (!user) return;
+    const lastCheck = localStorage.getItem(MOOD_KEY);
+    const today = new Date().toDateString();
+    if (lastCheck !== today) {
+      const timer = setTimeout(() => setShow(true), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const startDetection = useCallback(async () => {
+    setDetecting(true);
+    setCountdown(5);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 320, height: 240 } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      // Countdown timer
+      let remaining = 5;
+      const interval = setInterval(() => {
+        remaining--;
+        setCountdown(remaining);
+        if (remaining <= 0) {
+          clearInterval(interval);
+          analyzeMood();
+        }
+      }, 1000);
+    } catch {
+      // Camera permission denied - fall back to manual selection
+      setDetecting(false);
+    }
+  }, []);
+
+  const analyzeMood = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = 320;
+    canvas.height = 240;
+    ctx.drawImage(videoRef.current, 0, 0, 320, 240);
+
+    // Analyze pixel brightness/color for basic mood heuristic
+    const imageData = ctx.getImageData(0, 0, 320, 240);
+    const pixels = imageData.data;
+    let totalBrightness = 0;
+    let warmth = 0;
+    let skinPixels = 0;
+
+    for (let i = 0; i < pixels.length; i += 16) {
+      const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      totalBrightness += (r + g + b) / 3;
+      warmth += r - b;
+      // Detect skin-tone pixels
+      if (r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15) {
+        skinPixels++;
+      }
+    }
+
+    const avgBrightness = totalBrightness / (pixels.length / 16);
+    const avgWarmth = warmth / (pixels.length / 16);
+    const skinRatio = skinPixels / (pixels.length / 16);
+
+    // Simple heuristic mood detection
+    let mood: string;
+    let confidence: number;
+
+    if (skinRatio < 0.05) {
+      mood = "Neutral";
+      confidence = 0.3;
+    } else if (avgBrightness > 140 && avgWarmth > 20) {
+      mood = "Happy";
+      confidence = 0.7;
+    } else if (avgBrightness < 80) {
+      mood = "Sad";
+      confidence = 0.5;
+    } else if (avgWarmth > 40) {
+      mood = "Loving";
+      confidence = 0.6;
+    } else if (avgWarmth < -10) {
+      mood = "Frustrated";
+      confidence = 0.4;
+    } else {
+      mood = "Neutral";
+      confidence = 0.5;
+    }
+
+    setDetectedMood(mood);
+    stopCamera();
+
+    // Save to database
+    if (user) {
+      await supabase.from("mood_logs").insert({
+        user_id: user.id,
+        mood,
+        confidence,
+      } as any);
+      localStorage.setItem(MOOD_KEY, new Date().toDateString());
+
+      // Also update profile mood
+      const moodItem = moods.find(m => m.label === mood);
+      await supabase.from("profiles").update({
+        mood_emoji: moodItem?.emoji || "😐",
+        mood_text: `Feeling ${mood.toLowerCase()}`,
+        mood_updated_at: new Date().toISOString(),
+      }).eq("user_id", user.id);
+    }
+  }, [user]);
+
+  const selectManualMood = async (mood: string) => {
+    hapticLight();
+    setDetectedMood(mood);
+    if (user) {
+      const moodItem = moods.find(m => m.label === mood);
+      await supabase.from("mood_logs").insert({
+        user_id: user.id,
+        mood,
+        confidence: 1.0,
+      } as any);
+      await supabase.from("profiles").update({
+        mood_emoji: moodItem?.emoji || "😐",
+        mood_text: `Feeling ${mood.toLowerCase()}`,
+        mood_updated_at: new Date().toISOString(),
+      }).eq("user_id", user.id);
+      localStorage.setItem(MOOD_KEY, new Date().toDateString());
+    }
+    setTimeout(() => { setShow(false); setDetectedMood(null); }, 1500);
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    setShow(false);
+    setDetecting(false);
+    setDetectedMood(null);
+    localStorage.setItem(MOOD_KEY, new Date().toDateString());
+  };
+
+  if (!show) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 50 }}
+        className="fixed inset-x-4 bottom-20 z-[90] bg-card rounded-3xl border border-border/60 shadow-xl overflow-hidden safe-bottom"
+      >
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold">Daily Mood Check</p>
+            <button onClick={handleClose} className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+
+          {detectedMood ? (
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center py-4">
+              <p className="text-4xl mb-2">{moods.find(m => m.label === detectedMood)?.emoji}</p>
+              <p className="text-sm font-medium">You seem {detectedMood.toLowerCase()} today!</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Saved to your mood log</p>
+            </motion.div>
+          ) : detecting ? (
+            <div className="relative">
+              <video ref={videoRef} muted playsInline className="w-full rounded-2xl aspect-video object-cover" />
+              <canvas ref={canvasRef} className="hidden" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 1 }}
+                  className="h-16 w-16 rounded-full bg-foreground/20 backdrop-blur-sm flex items-center justify-center"
+                >
+                  <span className="text-2xl font-bold text-foreground">{countdown}</span>
+                </motion.div>
+              </div>
+              <p className="text-center text-[11px] text-muted-foreground mt-2">Analyzing your expression...</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-3">How are you feeling? Use camera or pick manually.</p>
+              <button onClick={startDetection}
+                className="w-full flex items-center justify-center gap-2 bg-foreground text-background rounded-xl py-2.5 text-sm font-medium mb-3 active:scale-[0.98] transition-transform">
+                <Camera className="h-4 w-4" /> Detect with Camera
+              </button>
+              <div className="flex justify-center gap-3">
+                {moods.map(m => (
+                  <button key={m.label} onClick={() => selectManualMood(m.label)}
+                    className="flex flex-col items-center gap-1 active:scale-90 transition-transform">
+                    <span className="text-2xl">{m.emoji}</span>
+                    <span className="text-[9px] text-muted-foreground">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+export default MoodDetector;
