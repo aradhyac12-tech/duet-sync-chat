@@ -77,6 +77,45 @@ export type Database = {
         }
         Relationships: []
       }
+      code_surprises: {
+        Row: {
+          created_at: string
+          creator_id: string
+          css_content: string
+          html_content: string
+          id: string
+          is_active: boolean
+          js_content: string
+          max_views: number
+          title: string
+          views_used: number
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          css_content?: string
+          html_content?: string
+          id?: string
+          is_active?: boolean
+          js_content?: string
+          max_views?: number
+          title?: string
+          views_used?: number
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          css_content?: string
+          html_content?: string
+          id?: string
+          is_active?: boolean
+          js_content?: string
+          max_views?: number
+          title?: string
+          views_used?: number
+        }
+        Relationships: []
+      }
       countdowns: {
         Row: {
           created_at: string
@@ -315,6 +354,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mood_logs: {
+        Row: {
+          confidence: number
+          created_at: string
+          detected_at: string
+          id: string
+          mood: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          detected_at?: string
+          id?: string
+          mood: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          detected_at?: string
+          id?: string
+          mood?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       playlist_songs: {
         Row: {
