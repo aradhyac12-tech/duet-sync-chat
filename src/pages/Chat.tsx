@@ -6,7 +6,7 @@ import TypingIndicator from "@/components/chat/TypingIndicator";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
 import PhotoViewer from "@/components/chat/PhotoViewer";
-import GridMenu from "@/components/chat/GridMenu";
+import GridMenu, { HubButton } from "@/components/chat/GridMenu";
 import CallEvent from "@/components/chat/CallEvent";
 import MessageContextMenu from "@/components/chat/MessageContextMenu";
 import IncomingCallOverlay from "@/components/IncomingCallOverlay";
