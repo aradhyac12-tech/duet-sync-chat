@@ -974,10 +974,7 @@ const Chat = () => {
                 <Mic className="h-4 w-4 text-background" />
               </button>
             )}
-            <button onClick={() => setShowGridMenu(true)}
-              className="h-10 w-10 rounded-full bg-muted/50 flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-              <LayoutGrid className="h-4 w-4" />
-            </button>
+            <HubButton onClick={() => setShowGridMenu(!showGridMenu)} isOpen={showGridMenu} />
           </div>
         )}
       </div>

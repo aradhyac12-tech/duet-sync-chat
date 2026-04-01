@@ -426,6 +426,9 @@ const Settings = () => {
           </div>
         </section>
 
+        {/* Code Surprises */}
+        <CodeSurpriseEditor />
+
         {/* Customization */}
         <section>
           <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">App Name</p>
