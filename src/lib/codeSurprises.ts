@@ -148,11 +148,11 @@ const createParticlePreset = ({
       const particle = document.createElement("span");
       particle.className = "particle";
       particle.textContent = icons[index % icons.length];
-      particle.style.setProperty("--left", `${Math.random() * 100}%`);
-      particle.style.setProperty("--delay", `${Math.random() * 4}s`);
-      particle.style.setProperty("--duration", `${5 + Math.random() * 5}s`);
-      particle.style.setProperty("--drift", `${-40 + Math.random() * 80}px`);
-      particle.style.setProperty("--size", `${1 + Math.random() * 1.8}rem`);
+      particle.style.setProperty("--left", (Math.random() * 100) + "%");
+      particle.style.setProperty("--delay", (Math.random() * 4) + "s");
+      particle.style.setProperty("--duration", (5 + Math.random() * 5) + "s");
+      particle.style.setProperty("--drift", (-40 + Math.random() * 80) + "px");
+      particle.style.setProperty("--size", (1 + Math.random() * 1.8) + "rem");
       particles.appendChild(particle);
     }
   `,
