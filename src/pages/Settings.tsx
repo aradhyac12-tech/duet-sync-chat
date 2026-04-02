@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
 import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight, Palette, Download, RotateCcw } from "lucide-react";
 import CodeSurpriseEditor from "@/components/CodeSurpriseEditor";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,7 @@ const presetWallpapers = [
 const Settings = () => {
   const { theme, setTheme, chatWallpaper, setChatWallpaper, appSettings, updateSetting } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
@@ -66,6 +67,16 @@ const Settings = () => {
     };
     load();
   }, [user]);
+
+  useEffect(() => {
+    const urlInvite = new URLSearchParams(location.search).get("invite");
+    const pendingInvite = urlInvite || sessionStorage.getItem("duo-pending-invite");
+
+    if (!user || currentPartner || !pendingInvite) return;
+
+    setJoinCode(pendingInvite.toUpperCase());
+    setShowPartnerDialog(true);
+  }, [currentPartner, location.search, user]);
 
   const generateInviteLink = async () => {
     if (!user) return;
@@ -129,8 +140,10 @@ const Settings = () => {
     const { data: pp } = await supabase.from("profiles").select("display_name").eq("user_id", invite.creator_id).single();
     if (pp) setPartnerName(pp.display_name);
 
+    sessionStorage.removeItem("duo-pending-invite");
     setShowPartnerDialog(false);
     setJoinCode("");
+    if (location.search) navigate("/settings", { replace: true });
     toast({ title: "Connected!", description: `Linked with ${pp?.display_name || "your partner"}` });
   };
 
@@ -427,7 +440,7 @@ const Settings = () => {
         </section>
 
         {/* Code Surprises */}
-        <CodeSurpriseEditor />
+        <CodeSurpriseEditor partnerId={currentPartner} />
 
         {/* Customization */}
         <section>

@@ -1,12 +1,14 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Code2, Eye, Palette, Braces, Save, Plus } from "lucide-react";
+import { X, Play, Code2, Eye, Palette, Braces, Save, Plus, Wand2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { hapticLight, hapticMedium } from "@/lib/haptics";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import CodeSurpriseFrame from "@/components/CodeSurpriseFrame";
+import { buildSurpriseDocument, defaultSurprisePreset, surprisePresets } from "@/lib/codeSurprises";
 
 interface Surprise {
   id: string;
@@ -20,43 +22,78 @@ interface Surprise {
   created_at: string;
 }
 
-const CodeSurpriseEditor = () => {
+interface CodeSurpriseEditorProps {
+  partnerId?: string | null;
+}
+
+const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [surprises, setSurprises] = useState<Surprise[]>([]);
   const [editing, setEditing] = useState<Surprise | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [title, setTitle] = useState("Surprise");
-  const [html, setHtml] = useState("");
-  const [css, setCss] = useState("");
-  const [js, setJs] = useState("");
+  const [title, setTitle] = useState(defaultSurprisePreset.title);
+  const [html, setHtml] = useState(defaultSurprisePreset.html_content);
+  const [css, setCss] = useState(defaultSurprisePreset.css_content);
+  const [js, setJs] = useState(defaultSurprisePreset.js_content);
   const [maxViews, setMaxViews] = useState(1);
-  const previewRef = useRef<HTMLIFrameElement>(null);
+
+  const previewDocument = useMemo(() => buildSurpriseDocument({
+    title,
+    html_content: html,
+    css_content: css,
+    js_content: js,
+    max_views: maxViews,
+  }), [css, html, js, maxViews, title]);
 
   useEffect(() => {
     if (!user) return;
     loadSurprises();
   }, [user]);
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "code-surprise-error" && event.data?.message) {
+        toast({ title: "Preview error", description: event.data.message, variant: "destructive" });
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [toast]);
+
   const loadSurprises = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("code_surprises")
       .select("*")
       .eq("creator_id", user.id)
       .order("created_at", { ascending: false }) as any;
+    if (error) {
+      toast({ title: "Couldn't load surprises", description: error.message, variant: "destructive" });
+      return;
+    }
     if (data) setSurprises(data);
+  };
+
+  const applyPreset = (presetId: string) => {
+    const preset = surprisePresets.find((item) => item.id === presetId);
+    if (!preset) return;
+
+    hapticLight();
+    setEditing(null);
+    setTitle(preset.title);
+    setHtml(preset.html_content);
+    setCss(preset.css_content);
+    setJs(preset.js_content);
+    setMaxViews(preset.max_views);
   };
 
   const startNew = () => {
     hapticLight();
     setEditing(null);
-    setTitle("Surprise");
-    setHtml('<div class="container">\n  <h1>💐</h1>\n  <p>I love you!</p>\n</div>');
-    setCss('body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #fce4ec, #f8bbd0); font-family: system-ui; }\n.container { text-align: center; animation: fadeIn 1s ease; }\nh1 { font-size: 4rem; margin: 0; }\np { font-size: 1.2rem; color: #ad1457; }\n@keyframes fadeIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }');
-    setJs("");
-    setMaxViews(1);
+    applyPreset(defaultSurprisePreset.id);
     setShowEditor(true);
   };
 
@@ -82,47 +119,63 @@ const CodeSurpriseEditor = () => {
       css_content: css,
       js_content: js,
       max_views: maxViews,
+      views_used: 0,
       is_active: true,
     };
 
-    if (editing) {
-      await supabase.from("code_surprises").update(payload as any).eq("id", editing.id);
-    } else {
-      await supabase.from("code_surprises").insert(payload as any);
+    const { error } = editing
+      ? await supabase.from("code_surprises").update(payload as any).eq("id", editing.id)
+      : await supabase.from("code_surprises").insert(payload as any);
+
+    if (error) {
+      toast({ title: "Couldn't save surprise", description: error.message, variant: "destructive" });
+      return;
     }
 
-    toast({ title: editing ? "Updated" : "Surprise created!" });
+    toast({
+      title: editing ? "Updated" : "Surprise created!",
+      description: partnerId ? "Ready to show on your partner's app." : "Connect your partner to deliver it live.",
+    });
     setShowEditor(false);
     loadSurprises();
   };
 
   const deleteSurprise = async (id: string) => {
     hapticMedium();
-    await supabase.from("code_surprises").delete().eq("id", id);
+    const { error } = await supabase.from("code_surprises").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Couldn't delete surprise", description: error.message, variant: "destructive" });
+      return;
+    }
     toast({ title: "Deleted" });
     loadSurprises();
   };
 
   const toggleActive = async (s: Surprise) => {
     hapticLight();
-    await supabase.from("code_surprises").update({ is_active: !s.is_active } as any).eq("id", s.id);
+    const { error } = await supabase.from("code_surprises").update({ is_active: !s.is_active } as any).eq("id", s.id);
+    if (error) {
+      toast({ title: "Couldn't update surprise", description: error.message, variant: "destructive" });
+      return;
+    }
     loadSurprises();
   };
 
   const runPreview = () => {
-    if (!previewRef.current) return;
-    const doc = previewRef.current.contentDocument;
-    if (doc) {
-      doc.open();
-      doc.write(`<!DOCTYPE html><html><head><style>${css}</style></head><body>${html}<script>${js}<\/script></body></html>`);
-      doc.close();
-    }
+    hapticLight();
     setShowPreview(true);
   };
 
   return (
     <section>
       <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Code Surprises</p>
+      <div className="bg-card rounded-2xl border border-border/60 p-3 mb-2.5">
+        <p className="text-sm font-medium">Full-screen partner surprises</p>
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Use presets or custom HTML/CSS/JS, test them in-app, then send them live.
+          {partnerId ? " Your current partner can receive active surprises." : " Connect your partner first to deliver them."}
+        </p>
+      </div>
       <div className="space-y-2">
         {surprises.map(s => (
           <div key={s.id} className="bg-card rounded-2xl border border-border/60 p-3 flex items-center gap-3">
@@ -168,12 +221,29 @@ const CodeSurpriseEditor = () => {
               <Input value={title} onChange={(e) => setTitle(e.target.value)}
                 className="mx-3 h-8 rounded-full text-sm text-center flex-1" placeholder="Title" />
               <div className="flex gap-1.5">
-                <button onClick={runPreview} className="h-8 w-8 rounded-full bg-accent/50 flex items-center justify-center">
-                  <Play className="h-3.5 w-3.5 text-foreground" />
+                <button onClick={runPreview} className="h-8 px-3 rounded-full bg-accent/60 flex items-center justify-center gap-1 text-xs font-medium text-foreground">
+                  <Play className="h-3.5 w-3.5" /> Test
                 </button>
                 <button onClick={saveSurprise} className="h-8 px-3 rounded-full bg-foreground text-background flex items-center gap-1 text-xs font-medium">
                   <Save className="h-3 w-3" /> Save
                 </button>
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-b border-border/20 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                <Wand2 className="h-3.5 w-3.5" /> Presets
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {surprisePresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => applyPreset(preset.id)}
+                    className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-3 py-1.5 text-[11px] font-medium text-foreground active:scale-95 transition-transform"
+                  >
+                    {preset.title}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -222,8 +292,7 @@ const CodeSurpriseEditor = () => {
                     </button>
                   </div>
                   <div className="flex-1 p-4">
-                    <iframe ref={previewRef} title="preview" sandbox="allow-scripts"
-                      className="w-full h-full rounded-2xl border border-border/30 bg-white" />
+                    <CodeSurpriseFrame documentHtml={previewDocument} title={`${title} preview`} />
                   </div>
                 </motion.div>
               )}
