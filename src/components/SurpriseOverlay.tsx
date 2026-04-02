@@ -1,8 +1,10 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import CodeSurpriseFrame from "@/components/CodeSurpriseFrame";
+import { buildSurpriseDocument } from "@/lib/codeSurprises";
 
 interface Surprise {
   id: string;
@@ -19,54 +21,99 @@ const SurpriseOverlay = () => {
   const { user } = useAuth();
   const [surprise, setSurprise] = useState<Surprise | null>(null);
   const [show, setShow] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+
+  const surpriseDocument = useMemo(() => {
+    if (!surprise) return "";
+
+    return buildSurpriseDocument({
+      title: surprise.title,
+      html_content: surprise.html_content,
+      css_content: surprise.css_content,
+      js_content: surprise.js_content,
+      max_views: surprise.max_views,
+    });
+  }, [surprise]);
+
+  const checkSurprises = useCallback(async () => {
+    if (!user || !partnerId) return;
+
+    const { data, error } = await supabase
+      .from("code_surprises")
+      .select("*")
+      .eq("creator_id", partnerId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error || !data?.length) return;
+
+    const nextSurprise = data[0] as Surprise;
+    if (nextSurprise.views_used >= nextSurprise.max_views) return;
+
+    const seenKey = `seen-surprises:${partnerId}`;
+    const seen = JSON.parse(sessionStorage.getItem(seenKey) || "[]") as string[];
+
+    if (seen.includes(nextSurprise.id)) return;
+
+    setSurprise(nextSurprise);
+    setShow(true);
+    sessionStorage.setItem(seenKey, JSON.stringify([...seen, nextSurprise.id]));
+
+    const nextViews = nextSurprise.views_used + 1;
+    await supabase
+      .from("code_surprises")
+      .update({ views_used: nextViews, is_active: nextViews < nextSurprise.max_views } as any)
+      .eq("id", nextSurprise.id);
+  }, [partnerId, user]);
 
   useEffect(() => {
     if (!user) return;
-    const checkSurprises = async () => {
-      // Get partner's active surprises that haven't exceeded max views
+    const loadPartner = async () => {
       const { data } = await supabase
-        .from("code_surprises")
-        .select("*")
-        .neq("creator_id", user.id)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1) as any;
+        .from("profiles")
+        .select("partner_id")
+        .eq("user_id", user.id)
+        .single();
 
-      if (data && data.length > 0) {
-        const s = data[0] as Surprise;
-        if (s.views_used < s.max_views) {
-          const seen = JSON.parse(sessionStorage.getItem("seen-surprises") || "[]");
-          if (!seen.includes(s.id)) {
-            setSurprise(s);
-            setShow(true);
-            seen.push(s.id);
-            sessionStorage.setItem("seen-surprises", JSON.stringify(seen));
-            // Increment views
-            await supabase.from("code_surprises").update({ views_used: s.views_used + 1 } as any).eq("id", s.id);
-          }
-        }
-      }
+      setPartnerId(data?.partner_id ?? null);
     };
-    const timeout = setTimeout(checkSurprises, 2000);
-    return () => clearTimeout(timeout);
+
+    loadPartner();
   }, [user]);
+
+  useEffect(() => {
+    if (!partnerId) return;
+
+    const timeout = setTimeout(() => {
+      checkSurprises();
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [checkSurprises, partnerId]);
+
+  useEffect(() => {
+    if (!partnerId) return;
+
+    const channel = supabase
+      .channel("code-surprises-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "code_surprises" }, (payload) => {
+        const creatorId = (payload.new as { creator_id?: string } | null)?.creator_id;
+        if (creatorId === partnerId) {
+          checkSurprises();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [checkSurprises, partnerId]);
 
   const handleClose = () => {
     setShow(false);
     setTimeout(() => setSurprise(null), 300);
   };
-
-  useEffect(() => {
-    if (show && surprise && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(`<!DOCTYPE html><html><head><style>${surprise.css_content}</style></head><body>${surprise.html_content}<script>${surprise.js_content}<\/script></body></html>`);
-        doc.close();
-      }
-    }
-  }, [show, surprise]);
 
   return (
     <AnimatePresence>
@@ -85,12 +132,7 @@ const SurpriseOverlay = () => {
             </button>
           </div>
           <div className="flex-1 p-4">
-            <iframe
-              ref={iframeRef}
-              title="surprise"
-              sandbox="allow-scripts"
-              className="w-full h-full rounded-2xl border border-border/30 bg-white"
-            />
+            <CodeSurpriseFrame documentHtml={surpriseDocument} title={surprise.title} />
           </div>
         </motion.div>
       )}

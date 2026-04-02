@@ -83,7 +83,12 @@ const ProtectedRoutes = () => {
 const AuthRoute = () => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/chat" replace />;
+  if (user) {
+    const params = new URLSearchParams(window.location.search);
+    const pendingInvite = params.get("invite") || sessionStorage.getItem("duo-pending-invite");
+    if (pendingInvite) return <Navigate to={`/settings?invite=${encodeURIComponent(pendingInvite)}`} replace />;
+    return <Navigate to="/chat" replace />;
+  }
   return <Auth />;
 };
 

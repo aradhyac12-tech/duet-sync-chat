@@ -2,7 +2,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Image, Phone, MapPin, Music, Heart, Settings, X, BookOpen } from "lucide-react";
 import { hapticLight } from "@/lib/haptics";
-import { useState } from "react";
 
 const items = [
   { path: "/gallery", icon: Image, label: "Gallery" },
@@ -27,32 +26,38 @@ const GridMenu = ({ onClose }: GridMenuProps) => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.12 }}
-      className="fixed inset-0 z-50 bg-background/95 backdrop-blur-2xl"
+      className="fixed inset-0 z-50"
       onClick={onClose}
     >
-      <div className="safe-top px-4 pt-3 flex justify-end">
-        <button onClick={onClose} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+      <div className="absolute bottom-[4.25rem] right-3 flex flex-col items-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <motion.button
+          initial={{ opacity: 0, x: 16, scale: 0.92 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 16, scale: 0.92 }}
+          transition={{ duration: 0.14 }}
+          onClick={onClose}
+          className="h-9 w-9 rounded-full bg-card border border-border/50 shadow-lg flex items-center justify-center"
+        >
           <X className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </div>
-      <div className="px-6 pt-6" onClick={(e) => e.stopPropagation()}>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4 px-1">Navigate</p>
-        <div className="grid grid-cols-3 gap-3">
+        </motion.button>
+
+        <div className="flex flex-col items-end gap-2">
           {items.map((item, i) => {
             const Icon = item.icon;
             return (
               <motion.button
                 key={item.path}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03, duration: 0.15 }}
+                initial={{ opacity: 0, x: 24, scale: 0.92 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 20, scale: 0.92 }}
+                transition={{ delay: i * 0.03, duration: 0.16 }}
                 onClick={() => { hapticLight(); navigate(item.path); onClose(); }}
-                className="flex flex-col items-center gap-2 py-5 rounded-2xl bg-card border border-border/30 active:scale-95 transition-transform"
+                className="flex items-center gap-3 rounded-full bg-card border border-border/50 shadow-lg px-3 py-2 min-w-[140px] active:scale-95 transition-transform"
               >
-                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center">
-                  <Icon className="h-[18px] w-[18px] text-foreground" />
+                <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <Icon className="h-4 w-4 text-foreground" />
                 </div>
-                <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+                <span className="text-xs font-medium text-foreground">{item.label}</span>
               </motion.button>
             );
           })}

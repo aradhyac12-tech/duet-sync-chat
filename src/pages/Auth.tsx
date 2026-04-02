@@ -26,33 +26,75 @@ const Auth = () => {
   useEffect(() => {
     const hash = window.location.hash;
     const params = new URLSearchParams(window.location.search);
-    
-    // Check if this is an OAuth callback (has access_token in hash or error)
-    if (hash.includes("access_token") || hash.includes("error_description") || params.get("error")) {
+    const inviteCode = params.get("invite");
+
+    if (inviteCode) {
+      sessionStorage.setItem("duo-pending-invite", inviteCode.toUpperCase());
+    }
+
+    const clearCallbackUrl = () => {
+      const inviteSuffix = inviteCode ? `?invite=${encodeURIComponent(inviteCode)}` : "";
+      window.history.replaceState({}, "", `${window.location.pathname}${inviteSuffix}`);
+    };
+
+    const hasOAuthCallback =
+      hash.includes("access_token") ||
+      hash.includes("error_description") ||
+      Boolean(params.get("error")) ||
+      Boolean(params.get("code"));
+
+    if (hasOAuthCallback) {
+      let cancelled = false;
       setOauthProcessing(true);
-      
+
       if (hash.includes("error_description")) {
         const errorDesc = decodeURIComponent(hash.split("error_description=")[1]?.split("&")[0] || "Authentication failed");
         toast({ title: "Sign in failed", description: errorDesc, variant: "destructive" });
         setOauthProcessing(false);
-        // Clean URL
-        window.history.replaceState({}, "", window.location.pathname);
+        clearCallbackUrl();
         return;
       }
 
       if (params.get("error")) {
         toast({ title: "Sign in failed", description: params.get("error_description") || "Authentication failed", variant: "destructive" });
         setOauthProcessing(false);
-        window.history.replaceState({}, "", window.location.pathname);
+        clearCallbackUrl();
         return;
       }
 
-      // The supabase client should pick up the hash automatically
-      // Give it a moment to process
-      const timer = setTimeout(() => {
-        setOauthProcessing(false);
-      }, 5000);
-      return () => clearTimeout(timer);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session && !cancelled) {
+          clearCallbackUrl();
+          setOauthProcessing(false);
+        }
+      });
+
+      const finalizeOAuth = async () => {
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            if (!cancelled) {
+              clearCallbackUrl();
+              setOauthProcessing(false);
+            }
+            return;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 400));
+        }
+
+        if (!cancelled) {
+          clearCallbackUrl();
+          setOauthProcessing(false);
+        }
+      };
+
+      finalizeOAuth();
+
+      return () => {
+        cancelled = true;
+        subscription.unsubscribe();
+      };
     }
   }, [toast]);
 
@@ -122,8 +164,10 @@ const Auth = () => {
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     try {
+      const redirectUri = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: redirectUri,
+        extraParams: { prompt: "select_account" },
       });
       if (result?.error) {
         toast({ title: "Google sign-in failed", description: String(result.error), variant: "destructive" });
@@ -137,8 +181,9 @@ const Auth = () => {
   const handleAppleLogin = async () => {
     setAppleLoading(true);
     try {
+      const redirectUri = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       const result = await lovable.auth.signInWithOAuth("apple", {
-        redirect_uri: window.location.origin,
+        redirect_uri: redirectUri,
       });
       if (result?.error) {
         toast({ title: "Apple sign-in failed", description: String(result.error), variant: "destructive" });

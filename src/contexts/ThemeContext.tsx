@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { Capacitor } from "@capacitor/core";
 
 export type ThemeColor = "soft-neutral" | "midnight" | "ocean" | "rose" | "forest" | "lavender";
 
@@ -172,6 +173,7 @@ const themeStyles: Record<ThemeColor, Record<string, string>> = {
 };
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
+  const isNativePlatform = Capacitor.isNativePlatform();
   const [theme, setThemeState] = useState<ThemeColor>(() => {
     return (localStorage.getItem("duo-theme") as ThemeColor) || "soft-neutral";
   });
@@ -228,13 +230,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // App lock: lock when tab goes hidden (if biometric lock is on)
   useEffect(() => {
-    if (!appSettings.biometricLock) return;
+    if (!appSettings.biometricLock || !isNativePlatform) {
+      setIsAppLocked(false);
+      return;
+    }
+
     const handleHidden = () => {
       if (document.hidden) setIsAppLocked(true);
     };
+
     document.addEventListener("visibilitychange", handleHidden);
     return () => document.removeEventListener("visibilitychange", handleHidden);
-  }, [appSettings.biometricLock]);
+  }, [appSettings.biometricLock, isNativePlatform]);
 
   useEffect(() => {
     const root = document.documentElement;
