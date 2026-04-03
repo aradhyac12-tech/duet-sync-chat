@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, Camera, Mic, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown, Phone, Video, MoreVertical, LayoutGrid, MicOff, VideoOff, PhoneOff, Monitor, MonitorOff, Wifi, Copy, Forward } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
+import { dispatchEmojiEffect } from "@/components/EmojiScreenEffect";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
