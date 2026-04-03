@@ -94,6 +94,12 @@ const Settings = () => {
     setShowInviteDialog(true);
   };
 
+  const copyInviteCode = () => {
+    hapticLight();
+    navigator.clipboard.writeText(inviteCode);
+    toast({ title: "Code copied" });
+  };
+
   const copyInviteLink = () => {
     hapticLight();
     const link = `${window.location.origin}/auth?invite=${inviteCode}`;
@@ -115,15 +121,29 @@ const Settings = () => {
     hapticMedium();
     const code = joinCode.trim().toUpperCase();
 
-    const { data: invite } = await supabase
+    // Try finding the invite - check both with and without expiry
+    const { data: invite, error: inviteError } = await supabase
       .from("invite_links")
       .select("*")
       .eq("code", code)
       .is("used_by", null)
+      .gt("expires_at", new Date().toISOString())
       .single() as any;
 
-    if (!invite) {
-      toast({ title: "Invalid or expired code", variant: "destructive" });
+    if (inviteError || !invite) {
+      // Check if code exists but expired
+      const { data: expiredInvite } = await supabase
+        .from("invite_links")
+        .select("*")
+        .eq("code", code)
+        .is("used_by", null)
+        .single() as any;
+      
+      if (expiredInvite) {
+        toast({ title: "Code expired", description: "Ask your partner for a new invite code", variant: "destructive" });
+      } else {
+        toast({ title: "Invalid code", description: "Double-check the code and try again", variant: "destructive" });
+      }
       return;
     }
 
@@ -482,13 +502,16 @@ const Settings = () => {
             <p className="text-2xl font-mono font-bold tracking-[0.3em]">{inviteCode}</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={copyInviteLink} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
-              <Copy className="h-3.5 w-3.5" /> Copy link
+            <Button onClick={copyInviteCode} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
+              <Copy className="h-3.5 w-3.5" /> Copy code
             </Button>
-            <Button onClick={shareInviteLink} className="flex-1 rounded-full bg-foreground text-background gap-2 text-sm h-9">
-              <Share2 className="h-3.5 w-3.5" /> Share
+            <Button onClick={copyInviteLink} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
+              <Link2 className="h-3.5 w-3.5" /> Copy link
             </Button>
           </div>
+          <Button onClick={shareInviteLink} className="w-full rounded-full bg-foreground text-background gap-2 text-sm h-9">
+            <Share2 className="h-3.5 w-3.5" /> Share
+          </Button>
         </DialogContent>
       </Dialog>
 

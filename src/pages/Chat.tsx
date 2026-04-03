@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Paperclip, ImageIcon, FileText, Trash2, Camera, Mic, Play, Pause, Reply, Timer, TimerOff, Search, X, ChevronUp, ChevronDown, Phone, Video, MoreVertical, LayoutGrid, MicOff, VideoOff, PhoneOff, Monitor, MonitorOff, Wifi, Copy, Forward } from "lucide-react";
 import MessageStatus from "@/components/chat/MessageStatus";
 import MessageReactions from "@/components/chat/MessageReactions";
+import { dispatchEmojiEffect } from "@/components/EmojiScreenEffect";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import QuotedMessage from "@/components/chat/QuotedMessage";
@@ -301,7 +302,16 @@ const Chat = () => {
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
           const decryptedContent = msg.message_type === "text" ? await decrypt(msg.content) : msg.content;
           setMessages((prev) => [...prev, { ...msg, decryptedContent }]);
-          if (msg.sender_id !== user.id) { playMessageSound(); hapticMessageReceived(); }
+          if (msg.sender_id !== user.id) {
+            playMessageSound(); hapticMessageReceived();
+            // Trigger emoji screen effect for incoming love messages
+            if (decryptedContent) {
+              const loveEmojis = ["❤️", "♥️", "💕", "💖", "💗", "😍", "🥰", "💘", "💝"];
+              for (const emoji of loveEmojis) {
+                if (decryptedContent.includes(emoji)) { dispatchEmojiEffect(emoji); break; }
+              }
+            }
+          }
         }
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, () => {
@@ -454,6 +464,11 @@ const Chat = () => {
     setReplyTo(null);
     const encryptedText = e2eReady ? await encrypt(text) : text;
     hapticMessageSent();
+    // Trigger screen emoji effect for love emojis
+    const loveEmojis = ["❤️", "♥️", "💕", "💖", "💗", "😍", "🥰", "💘", "💝", "🔥", "🎉"];
+    for (const emoji of loveEmojis) {
+      if (text.includes(emoji)) { dispatchEmojiEffect(emoji); break; }
+    }
     const { error } = await supabase.from("messages").insert({
       sender_id: user.id, receiver_id: partnerId, content: encryptedText,
       message_type: "text", reply_to_id: currentReplyTo?.id || null,
@@ -659,7 +674,7 @@ const Chat = () => {
   // === In-call fullscreen overlay ===
   if (callState === "joined" || callState === "joining") {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-[hsl(var(--foreground))] relative">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[100dvh] bg-[hsl(var(--foreground))] relative">
         <video ref={remoteVideoRef} autoPlay playsInline
           className={`absolute inset-0 w-full h-full object-cover ${isScreenSharing ? "hidden" : ""}`} />
         <video ref={screenShareRef} autoPlay playsInline
@@ -744,7 +759,7 @@ const Chat = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-[100dvh] bg-background">
       {/* Incoming call overlay */}
       <IncomingCallOverlay onAccept={handleAcceptIncoming} onDecline={handleDeclineIncoming} />
 
