@@ -665,7 +665,7 @@ const Chat = () => {
   // === In-call fullscreen overlay ===
   if (callState === "joined" || callState === "joining") {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-[hsl(var(--foreground))] relative">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[100dvh] bg-[hsl(var(--foreground))] relative">
         <video ref={remoteVideoRef} autoPlay playsInline
           className={`absolute inset-0 w-full h-full object-cover ${isScreenSharing ? "hidden" : ""}`} />
         <video ref={screenShareRef} autoPlay playsInline
