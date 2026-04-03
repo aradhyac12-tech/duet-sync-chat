@@ -94,6 +94,12 @@ const Settings = () => {
     setShowInviteDialog(true);
   };
 
+  const copyInviteCode = () => {
+    hapticLight();
+    navigator.clipboard.writeText(inviteCode);
+    toast({ title: "Code copied" });
+  };
+
   const copyInviteLink = () => {
     hapticLight();
     const link = `${window.location.origin}/auth?invite=${inviteCode}`;
