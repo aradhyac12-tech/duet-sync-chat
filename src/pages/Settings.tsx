@@ -115,15 +115,29 @@ const Settings = () => {
     hapticMedium();
     const code = joinCode.trim().toUpperCase();
 
-    const { data: invite } = await supabase
+    // Try finding the invite - check both with and without expiry
+    const { data: invite, error: inviteError } = await supabase
       .from("invite_links")
       .select("*")
       .eq("code", code)
       .is("used_by", null)
+      .gt("expires_at", new Date().toISOString())
       .single() as any;
 
-    if (!invite) {
-      toast({ title: "Invalid or expired code", variant: "destructive" });
+    if (inviteError || !invite) {
+      // Check if code exists but expired
+      const { data: expiredInvite } = await supabase
+        .from("invite_links")
+        .select("*")
+        .eq("code", code)
+        .is("used_by", null)
+        .single() as any;
+      
+      if (expiredInvite) {
+        toast({ title: "Code expired", description: "Ask your partner for a new invite code", variant: "destructive" });
+      } else {
+        toast({ title: "Invalid code", description: "Double-check the code and try again", variant: "destructive" });
+      }
       return;
     }
 

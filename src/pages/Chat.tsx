@@ -455,6 +455,11 @@ const Chat = () => {
     setReplyTo(null);
     const encryptedText = e2eReady ? await encrypt(text) : text;
     hapticMessageSent();
+    // Trigger screen emoji effect for love emojis
+    const loveEmojis = ["❤️", "♥️", "💕", "💖", "💗", "😍", "🥰", "💘", "💝", "🔥", "🎉"];
+    for (const emoji of loveEmojis) {
+      if (text.includes(emoji)) { dispatchEmojiEffect(emoji); break; }
+    }
     const { error } = await supabase.from("messages").insert({
       sender_id: user.id, receiver_id: partnerId, content: encryptedText,
       message_type: "text", reply_to_id: currentReplyTo?.id || null,
