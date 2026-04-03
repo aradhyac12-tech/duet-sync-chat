@@ -502,13 +502,16 @@ const Settings = () => {
             <p className="text-2xl font-mono font-bold tracking-[0.3em]">{inviteCode}</p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={copyInviteLink} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
-              <Copy className="h-3.5 w-3.5" /> Copy link
+            <Button onClick={copyInviteCode} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
+              <Copy className="h-3.5 w-3.5" /> Copy code
             </Button>
-            <Button onClick={shareInviteLink} className="flex-1 rounded-full bg-foreground text-background gap-2 text-sm h-9">
-              <Share2 className="h-3.5 w-3.5" /> Share
+            <Button onClick={copyInviteLink} variant="outline" className="flex-1 rounded-full gap-2 text-sm h-9">
+              <Link2 className="h-3.5 w-3.5" /> Copy link
             </Button>
           </div>
+          <Button onClick={shareInviteLink} className="w-full rounded-full bg-foreground text-background gap-2 text-sm h-9">
+            <Share2 className="h-3.5 w-3.5" /> Share
+          </Button>
         </DialogContent>
       </Dialog>
 

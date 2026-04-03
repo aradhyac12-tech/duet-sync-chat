@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Code2, Eye, Palette, Braces, Save, Plus, Wand2 } from "lucide-react";
+import { X, Play, Code2, Eye, Palette, Braces, Save, Plus, Wand2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +38,9 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
   const [css, setCss] = useState(defaultSurprisePreset.css_content);
   const [js, setJs] = useState(defaultSurprisePreset.js_content);
   const [maxViews, setMaxViews] = useState(1);
+  const htmlFileRef = useRef<HTMLInputElement>(null);
+  const cssFileRef = useRef<HTMLInputElement>(null);
+  const jsFileRef = useRef<HTMLInputElement>(null);
 
   const previewDocument = useMemo(() => buildSurpriseDocument({
     title,
@@ -58,7 +61,6 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
         toast({ title: "Preview error", description: event.data.message, variant: "destructive" });
       }
     };
-
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [toast]);
@@ -80,7 +82,6 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
   const applyPreset = (presetId: string) => {
     const preset = surprisePresets.find((item) => item.id === presetId);
     if (!preset) return;
-
     hapticLight();
     setEditing(null);
     setTitle(preset.title);
@@ -106,6 +107,18 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
     setJs(s.js_content);
     setMaxViews(s.max_views);
     setShowEditor(true);
+  };
+
+  const handleFileUpload = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setter(reader.result as string);
+      toast({ title: `${file.name} loaded` });
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   const saveSurprise = async () => {
@@ -172,8 +185,8 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
       <div className="bg-card rounded-2xl border border-border/60 p-3 mb-2.5">
         <p className="text-sm font-medium">Full-screen partner surprises</p>
         <p className="text-[11px] text-muted-foreground mt-1">
-          Use presets or custom HTML/CSS/JS, test them in-app, then send them live.
-          {partnerId ? " Your current partner can receive active surprises." : " Connect your partner first to deliver them."}
+          Use presets, write custom code, or upload HTML/CSS/JS files. JS is optional.
+          {partnerId ? " Your partner will receive active surprises." : " Connect your partner first."}
         </p>
       </div>
       <div className="space-y-2">
@@ -204,6 +217,11 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
           <Plus className="h-4 w-4" /> New Surprise
         </button>
       </div>
+
+      {/* Hidden file inputs */}
+      <input ref={htmlFileRef} type="file" accept=".html,.htm" className="hidden" onChange={handleFileUpload(setHtml)} />
+      <input ref={cssFileRef} type="file" accept=".css" className="hidden" onChange={handleFileUpload(setCss)} />
+      <input ref={jsFileRef} type="file" accept=".js" className="hidden" onChange={handleFileUpload(setJs)} />
 
       {/* Editor modal */}
       <AnimatePresence>
@@ -261,22 +279,41 @@ const CodeSurpriseEditor = ({ partnerId }: CodeSurpriseEditorProps) => {
               <TabsList className="mx-4 mt-2 bg-muted/50 rounded-xl h-8">
                 <TabsTrigger value="html" className="text-[10px] flex-1 gap-1"><Code2 className="h-3 w-3" />HTML</TabsTrigger>
                 <TabsTrigger value="css" className="text-[10px] flex-1 gap-1"><Palette className="h-3 w-3" />CSS</TabsTrigger>
-                <TabsTrigger value="js" className="text-[10px] flex-1 gap-1"><Braces className="h-3 w-3" />JS</TabsTrigger>
+                <TabsTrigger value="js" className="text-[10px] flex-1 gap-1"><Braces className="h-3 w-3" />JS (optional)</TabsTrigger>
               </TabsList>
-              <TabsContent value="html" className="flex-1 px-4 pb-4 mt-2 min-h-0">
+              <TabsContent value="html" className="flex-1 px-4 pb-4 mt-2 min-h-0 flex flex-col gap-2">
+                <div className="flex justify-end">
+                  <button onClick={() => htmlFileRef.current?.click()} className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 rounded-full px-2.5 py-1">
+                    <Upload className="h-3 w-3" /> Upload .html
+                  </button>
+                </div>
                 <textarea value={html} onChange={(e) => setHtml(e.target.value)}
-                  className="w-full h-full rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-full flex-1 rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
                   placeholder="<div>Your HTML here</div>" spellCheck={false} />
               </TabsContent>
-              <TabsContent value="css" className="flex-1 px-4 pb-4 mt-2 min-h-0">
+              <TabsContent value="css" className="flex-1 px-4 pb-4 mt-2 min-h-0 flex flex-col gap-2">
+                <div className="flex justify-end">
+                  <button onClick={() => cssFileRef.current?.click()} className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 rounded-full px-2.5 py-1">
+                    <Upload className="h-3 w-3" /> Upload .css
+                  </button>
+                </div>
                 <textarea value={css} onChange={(e) => setCss(e.target.value)}
-                  className="w-full h-full rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-full flex-1 rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
                   placeholder="body { ... }" spellCheck={false} />
               </TabsContent>
-              <TabsContent value="js" className="flex-1 px-4 pb-4 mt-2 min-h-0">
+              <TabsContent value="js" className="flex-1 px-4 pb-4 mt-2 min-h-0 flex flex-col gap-2">
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => { setJs(""); toast({ title: "JS cleared — surprise will work with HTML+CSS only" }); }}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 rounded-full px-2.5 py-1">
+                    <X className="h-3 w-3" /> Clear JS
+                  </button>
+                  <button onClick={() => jsFileRef.current?.click()} className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 rounded-full px-2.5 py-1">
+                    <Upload className="h-3 w-3" /> Upload .js
+                  </button>
+                </div>
                 <textarea value={js} onChange={(e) => setJs(e.target.value)}
-                  className="w-full h-full rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
-                  placeholder="// Your JavaScript here" spellCheck={false} />
+                  className="w-full flex-1 rounded-xl bg-card border border-border/30 p-3 text-xs font-mono resize-none outline-none focus:ring-1 focus:ring-primary/30"
+                  placeholder="// Optional — leave empty if not needed" spellCheck={false} />
               </TabsContent>
             </Tabs>
 
