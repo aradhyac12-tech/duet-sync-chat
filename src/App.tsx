@@ -11,18 +11,25 @@ import PeekGuard from "@/components/PeekGuard";
 import Auth from "@/pages/Auth";
 import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
-import Chat from "@/pages/Chat";
-import Gallery from "@/pages/Gallery";
-import Calls from "@/pages/Calls";
-import Playlist from "@/pages/Playlist";
-import Shayari from "@/pages/Shayari";
-import MapView from "@/pages/MapView";
-import Us from "@/pages/Us";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+const Chat = lazy(() => import("@/pages/Chat"));
+const Gallery = lazy(() => import("@/pages/Gallery"));
+const Calls = lazy(() => import("@/pages/Calls"));
+const Playlist = lazy(() => import("@/pages/Playlist"));
+const Shayari = lazy(() => import("@/pages/Shayari"));
+const MapView = lazy(() => import("@/pages/MapView"));
+const Us = lazy(() => import("@/pages/Us"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+
+const PageFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <p className="text-xs text-muted-foreground animate-pulse">Loading...</p>
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -77,7 +84,11 @@ const ProtectedRoutes = () => {
 
   if (isAppLocked) return <AppLockScreen />;
 
-  return <AppLayout />;
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <AppLayout />
+    </Suspense>
+  );
 };
 
 const AuthRoute = () => {
@@ -100,6 +111,7 @@ const App = () => (
         <Sonner />
         <PeekGuard />
         <BrowserRouter>
+          <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -117,6 +129,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

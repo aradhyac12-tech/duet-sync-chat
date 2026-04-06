@@ -79,18 +79,20 @@ const Gallery = () => {
 
   const saveToGallery = async (file: File | Blob, fileName?: string) => {
     if (!user) return;
-    const name = fileName || `${Date.now()}.jpg`;
+    const ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
+    const name = fileName || `${Date.now()}.${ext}`;
     const path = `${user.id}/${Date.now()}_${name}`;
-    const { data: uploadData } = await supabase.storage.from("gallery").upload(path, file);
-    if (!uploadData) {
-      toast({ title: "Upload failed", variant: "destructive" });
+    const { data: uploadData, error: uploadErr } = await supabase.storage.from("gallery").upload(path, file, { contentType: file.type || "image/jpeg" });
+    if (uploadErr || !uploadData) {
+      console.error("Gallery upload error:", uploadErr);
+      toast({ title: "Upload failed", description: uploadErr?.message, variant: "destructive" });
       return;
     }
     const { data: urlData } = supabase.storage.from("gallery").getPublicUrl(path);
     const { data: item } = await supabase.from("gallery_items").insert({
       owner_id: user.id,
       file_url: urlData.publicUrl,
-      file_type: "image",
+      file_type: file.type?.startsWith("video") ? "video" : "image",
       is_shared: false,
     }).select().single();
     if (item) {
