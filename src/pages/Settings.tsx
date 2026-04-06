@@ -58,6 +58,8 @@ const Settings = () => {
   const [searching, setSearching] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [myUsername, setMyUsername] = useState("");
+  const [importingWhatsApp, setImportingWhatsApp] = useState(false);
+  const whatsappFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
