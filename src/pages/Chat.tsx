@@ -906,7 +906,7 @@ const Chat = () => {
 
       {/* Messages */}
       <div
-        className="flex-1 overflow-y-auto px-3 py-3"
+        className="flex-1 overflow-y-auto px-3 py-3 min-h-0"
         style={chatWallpaper ? {
           backgroundImage: chatWallpaper.startsWith("url(") ? chatWallpaper : undefined,
           background: chatWallpaper.startsWith("linear") ? chatWallpaper : undefined,
