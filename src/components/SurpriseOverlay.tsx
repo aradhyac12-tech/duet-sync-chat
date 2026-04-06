@@ -19,6 +19,7 @@ interface Surprise {
 
 const SurpriseOverlay = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [surprise, setSurprise] = useState<Surprise | null>(null);
   const [show, setShow] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -58,6 +59,13 @@ const SurpriseOverlay = () => {
 
     setSurprise(nextSurprise);
     setShow(true);
+    // Track analytics
+    if (user) {
+      supabase.from("code_surprise_events").insert([
+        { surprise_id: nextSurprise.id, user_id: user.id, event_type: "received" },
+        { surprise_id: nextSurprise.id, user_id: user.id, event_type: "opened" },
+      ] as any);
+    }
     sessionStorage.setItem(seenKey, JSON.stringify([...seen, nextSurprise.id]));
 
     const nextViews = nextSurprise.views_used + 1;

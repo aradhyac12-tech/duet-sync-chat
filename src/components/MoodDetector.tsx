@@ -4,6 +4,7 @@ import { Camera, X, Smile, Frown, Meh, Heart, Angry, ThumbsUp, ThumbsDown } from
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { hapticLight } from "@/lib/haptics";
+import { useToast } from "@/hooks/use-toast";
 
 const MOOD_KEY = "last-mood-check-date";
 
@@ -189,8 +190,6 @@ const MoodDetector = () => {
     setTimeout(() => { setShow(false); setDetectedMood(null); setFeedbackGiven(false); setLastLogId(null); }, 1000);
   };
 
-  const { toast: toast2 } = { toast: toast };
-
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -205,8 +204,6 @@ const MoodDetector = () => {
     setDetectedMood(null);
     localStorage.setItem(MOOD_KEY, new Date().toDateString());
   };
-
-  const toast = useToast().toast;
 
   if (!show) return null;
 
