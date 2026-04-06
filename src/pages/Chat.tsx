@@ -77,14 +77,17 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [waveform, setWaveform] = useState<number[]>(Array(20).fill(0.3));
   const audioRef = useRef<HTMLAudioElement>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number>(0);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onTime = () => setProgress(audio.currentTime);
     const onLoaded = () => setDuration(audio.duration);
-    const onEnded = () => { setPlaying(false); setProgress(0); };
+    const onEnded = () => { setPlaying(false); setProgress(0); setWaveform(Array(20).fill(0.3)); };
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onLoaded);
     audio.addEventListener("ended", onEnded);
@@ -92,13 +95,38 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onLoaded);
       audio.removeEventListener("ended", onEnded);
+      cancelAnimationFrame(animFrameRef.current);
     };
   }, []);
+
+  const startVisualizer = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      const ctx = new AudioContext();
+      const source = ctx.createMediaElementSource(audio);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+      analyserRef.current = analyser;
+      const update = () => {
+        if (!analyserRef.current) return;
+        const data = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(data);
+        const bars = Array(20).fill(0).map((_, i) => Math.max(0.15, (data[i] || 0) / 255));
+        setWaveform(bars);
+        animFrameRef.current = requestAnimationFrame(update);
+      };
+      update();
+    } catch { /* already connected */ }
+  };
 
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (playing) audio.pause(); else audio.play();
+    if (playing) { audio.pause(); cancelAnimationFrame(animFrameRef.current); }
+    else { audio.play(); startVisualizer(); }
     setPlaying(!playing);
   };
 
@@ -107,15 +135,29 @@ const VoiceMessagePlayer = ({ src, isMine }: { src: string; isMine: boolean }) =
     return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
   };
 
+  const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * duration;
+  };
+
   return (
-    <div className="flex items-center gap-2.5 min-w-[160px]">
-      <audio ref={audioRef} src={src} preload="metadata" />
-      <button onClick={toggle} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center shrink-0 transition-colors hover:bg-accent">
-        {playing ? <Pause className="h-3.5 w-3.5 text-foreground" /> : <Play className="h-3.5 w-3.5 text-foreground ml-0.5" />}
+    <div className="flex items-center gap-2.5 min-w-[180px]">
+      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
+      <button onClick={toggle} className="h-9 w-9 rounded-full bg-accent/60 flex items-center justify-center shrink-0 transition-colors hover:bg-accent active:scale-95">
+        {playing ? <Pause className="h-4 w-4 text-foreground" /> : <Play className="h-4 w-4 text-foreground ml-0.5" />}
       </button>
       <div className="flex-1 space-y-1">
-        <div className="h-[3px] bg-border rounded-full overflow-hidden">
-          <div className="h-full bg-foreground/40 rounded-full transition-all" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
+        <div className="flex items-end gap-[2px] h-5 cursor-pointer" onClick={seekTo}>
+          {waveform.map((h, i) => (
+            <div key={i} className={`flex-1 rounded-full transition-all duration-75 ${
+              duration && (i / waveform.length) <= (progress / duration) 
+                ? (isMine ? "bg-background/60" : "bg-foreground/60") 
+                : (isMine ? "bg-background/20" : "bg-foreground/20")
+            }`} style={{ height: `${Math.max(15, h * 100)}%` }} />
+          ))}
         </div>
         <p className="text-[10px] text-muted-foreground">{fmt(progress > 0 ? progress : duration)}</p>
       </div>
