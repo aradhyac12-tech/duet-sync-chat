@@ -575,6 +575,108 @@ const Settings = () => {
           </div>
         </section>
 
+        {/* WhatsApp Import */}
+        <section>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Import</p>
+          <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
+            <button
+              onClick={() => whatsappFileRef.current?.click()}
+              disabled={importingWhatsApp}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left active:scale-[0.98] transition-transform disabled:opacity-50"
+            >
+              <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{importingWhatsApp ? "Importing..." : "Import WhatsApp Chat"}</p>
+                <p className="text-[11px] text-muted-foreground">Upload exported .txt or .zip file</p>
+              </div>
+              <UploadIcon className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+          <input
+            ref={whatsappFileRef}
+            type="file"
+            accept=".txt,.zip"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file || !user) return;
+              setImportingWhatsApp(true);
+              try {
+                let text = "";
+                if (file.name.endsWith(".txt")) {
+                  text = await file.text();
+                } else if (file.name.endsWith(".zip")) {
+                  // For ZIP, try to find _chat.txt inside
+                  const { default: JSZip } = await import("jszip" as any).catch(() => ({ default: null }));
+                  if (!JSZip) {
+                    // Fallback: read as text
+                    text = await file.text();
+                  } else {
+                    const zip = await JSZip.loadAsync(file);
+                    const txtFile = Object.keys(zip.files).find(f => f.endsWith(".txt"));
+                    if (txtFile) text = await zip.files[txtFile].async("text");
+                  }
+                }
+
+                if (!text.trim()) {
+                  toast({ title: "Could not read file", variant: "destructive" });
+                  setImportingWhatsApp(false);
+                  return;
+                }
+
+                // Parse WhatsApp format: [DD/MM/YYYY, HH:MM:SS] Name: Message
+                const lines = text.split("\n");
+                const msgRegex = /^\[?(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APap][Mm])?)\]?\s*-?\s*([^:]+):\s*(.*)/;
+                const parsed: { sender: string; content: string; timestamp: Date }[] = [];
+
+                for (const line of lines) {
+                  const match = line.match(msgRegex);
+                  if (match) {
+                    const [, datePart, timePart, sender, content] = match;
+                    const parts = datePart.split(/[\/\-\.]/);
+                    let dateStr: string;
+                    if (parseInt(parts[0]) > 12) {
+                      dateStr = `${parts[1]}/${parts[0]}/${parts[2]}`;
+                    } else {
+                      dateStr = datePart.replace(/[\-\.]/g, "/");
+                    }
+                    const ts = new Date(`${dateStr} ${timePart}`);
+                    if (!isNaN(ts.getTime())) {
+                      parsed.push({ sender: sender.trim(), content: content.trim(), timestamp: ts });
+                    }
+                  } else if (parsed.length > 0 && line.trim()) {
+                    parsed[parsed.length - 1].content += "\n" + line.trim();
+                  }
+                }
+
+                if (parsed.length === 0) {
+                  toast({ title: "No messages found", description: "Check the file format", variant: "destructive" });
+                  setImportingWhatsApp(false);
+                  return;
+                }
+
+                // Insert in batches
+                const batchSize = 100;
+                for (let i = 0; i < parsed.length; i += batchSize) {
+                  const batch = parsed.slice(i, i + batchSize).map(m => ({
+                    owner_id: user.id,
+                    sender_name: m.sender,
+                    content: m.content,
+                    original_timestamp: m.timestamp.toISOString(),
+                  }));
+                  await supabase.from("imported_chats").insert(batch as any);
+                }
+
+                toast({ title: `Imported ${parsed.length} messages! 📱` });
+              } catch (err: any) {
+                toast({ title: "Import failed", description: err.message, variant: "destructive" });
+              }
+              setImportingWhatsApp(false);
+              e.target.value = "";
+            }}
+          />
+        </section>
+
         {/* Code Surprises */}
         <CodeSurpriseEditor partnerId={currentPartner} />
 
