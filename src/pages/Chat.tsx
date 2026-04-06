@@ -990,7 +990,7 @@ const Chat = () => {
       </AnimatePresence>
 
       {/* Input area */}
-      <div className="px-3 pb-3 pt-1.5 safe-bottom bg-background">
+      <div className="px-3 pb-3 pt-1.5 safe-bottom bg-background shrink-0">
         {isRecording ? (
           <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
             className="flex items-center gap-3 bg-destructive/5 rounded-full border border-destructive/10 px-4 py-2.5">
