@@ -77,6 +77,30 @@ export type Database = {
         }
         Relationships: []
       }
+      code_surprise_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          surprise_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          surprise_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          surprise_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       code_surprises: {
         Row: {
           created_at: string
@@ -194,6 +218,39 @@ export type Database = {
           id?: string
           is_shared?: boolean
           owner_id?: string
+        }
+        Relationships: []
+      }
+      imported_chats: {
+        Row: {
+          content: string | null
+          created_at: string
+          file_type: string | null
+          file_url: string | null
+          id: string
+          original_timestamp: string
+          owner_id: string
+          sender_name: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          original_timestamp: string
+          owner_id: string
+          sender_name: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          original_timestamp?: string
+          owner_id?: string
+          sender_name?: string
         }
         Relationships: []
       }
@@ -387,28 +444,64 @@ export type Database = {
       }
       mood_logs: {
         Row: {
+          arousal: number | null
           confidence: number
           created_at: string
           detected_at: string
+          feedback: string | null
           id: string
           mood: string
           user_id: string
+          valence: number | null
         }
         Insert: {
+          arousal?: number | null
           confidence?: number
           created_at?: string
           detected_at?: string
+          feedback?: string | null
           id?: string
           mood: string
           user_id: string
+          valence?: number | null
         }
         Update: {
+          arousal?: number | null
           confidence?: number
           created_at?: string
           detected_at?: string
+          feedback?: string | null
           id?: string
           mood?: string
           user_id?: string
+          valence?: number | null
+        }
+        Relationships: []
+      }
+      partner_requests: {
+        Row: {
+          created_at: string
+          id: string
+          receiver_id: string
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          receiver_id: string
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          receiver_id?: string
+          sender_id?: string
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -463,6 +556,7 @@ export type Database = {
           public_key: string | null
           updated_at: string
           user_id: string
+          username: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -481,6 +575,7 @@ export type Database = {
           public_key?: string | null
           updated_at?: string
           user_id: string
+          username?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -499,6 +594,7 @@ export type Database = {
           public_key?: string | null
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -506,21 +602,27 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          delete_requested_by: string | null
           id: string
+          is_favorite: boolean
           title: string | null
           user_id: string
         }
         Insert: {
           content: string
           created_at?: string
+          delete_requested_by?: string | null
           id?: string
+          is_favorite?: boolean
           title?: string | null
           user_id: string
         }
         Update: {
           content?: string
           created_at?: string
+          delete_requested_by?: string | null
           id?: string
+          is_favorite?: boolean
           title?: string | null
           user_id?: string
         }
@@ -551,6 +653,15 @@ export type Database = {
     Functions: {
       cleanup_disappeared_messages: { Args: never; Returns: undefined }
       get_partner_id: { Args: { _user_id: string }; Returns: string }
+      search_users: {
+        Args: { search_term: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          user_id: string
+          username: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

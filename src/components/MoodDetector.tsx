@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, Smile, Frown, Meh, Heart, Angry } from "lucide-react";
+import { Camera, X, Smile, Frown, Meh, Heart, Angry, ThumbsUp, ThumbsDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { hapticLight } from "@/lib/haptics";
+import { useToast } from "@/hooks/use-toast";
 
 const MOOD_KEY = "last-mood-check-date";
 
@@ -15,11 +16,22 @@ const moods = [
   { emoji: "😤", label: "Frustrated", icon: Angry, color: "text-red-500" },
 ];
 
+const moodToValence: Record<string, { valence: number; arousal: number }> = {
+  Happy: { valence: 0.7, arousal: 0.6 },
+  Sad: { valence: -0.6, arousal: 0.3 },
+  Neutral: { valence: 0, arousal: 0.4 },
+  Loving: { valence: 0.9, arousal: 0.7 },
+  Frustrated: { valence: -0.5, arousal: 0.8 },
+};
+
 const MoodDetector = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [show, setShow] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectedMood, setDetectedMood] = useState<string | null>(null);
+  const [lastLogId, setLastLogId] = useState<string | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -125,11 +137,15 @@ const MoodDetector = () => {
 
     // Save to database
     if (user) {
-      await supabase.from("mood_logs").insert({
+      const va = moodToValence[mood] || { valence: 0, arousal: 0.5 };
+      const { data: logData } = await supabase.from("mood_logs").insert({
         user_id: user.id,
         mood,
         confidence,
-      } as any);
+        valence: va.valence,
+        arousal: va.arousal,
+      } as any).select("id").single();
+      if (logData) setLastLogId((logData as any).id);
       localStorage.setItem(MOOD_KEY, new Date().toDateString());
 
       // Also update profile mood
@@ -147,11 +163,15 @@ const MoodDetector = () => {
     setDetectedMood(mood);
     if (user) {
       const moodItem = moods.find(m => m.label === mood);
-      await supabase.from("mood_logs").insert({
+      const va = moodToValence[mood] || { valence: 0, arousal: 0.5 };
+      const { data: logData } = await supabase.from("mood_logs").insert({
         user_id: user.id,
         mood,
         confidence: 1.0,
-      } as any);
+        valence: va.valence,
+        arousal: va.arousal,
+      } as any).select("id").single();
+      if (logData) setLastLogId((logData as any).id);
       await supabase.from("profiles").update({
         mood_emoji: moodItem?.emoji || "😐",
         mood_text: `Feeling ${mood.toLowerCase()}`,
@@ -160,6 +180,15 @@ const MoodDetector = () => {
       localStorage.setItem(MOOD_KEY, new Date().toDateString());
     }
     setTimeout(() => { setShow(false); setDetectedMood(null); }, 1500);
+  };
+
+  const giveFeedback = async (accurate: boolean) => {
+    if (!lastLogId) return;
+    hapticLight();
+    await supabase.from("mood_logs").update({ feedback: accurate ? "accurate" : "inaccurate" } as any).eq("id", lastLogId);
+    setFeedbackGiven(true);
+    toast({ title: accurate ? "Thanks! 👍" : "Got it, we'll improve" });
+    setTimeout(() => { setShow(false); setDetectedMood(null); setFeedbackGiven(false); setLastLogId(null); }, 1000);
   };
 
   const stopCamera = () => {
@@ -196,10 +225,21 @@ const MoodDetector = () => {
           </div>
 
           {detectedMood ? (
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center py-4">
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center py-3">
               <p className="text-4xl mb-2">{moods.find(m => m.label === detectedMood)?.emoji}</p>
               <p className="text-sm font-medium">You seem {detectedMood.toLowerCase()} today!</p>
               <p className="text-[11px] text-muted-foreground mt-1">Saved to your mood log</p>
+              {!feedbackGiven && (
+                <div className="flex items-center justify-center gap-3 mt-3">
+                  <p className="text-[10px] text-muted-foreground">Was this accurate?</p>
+                  <button onClick={() => giveFeedback(true)} className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
+                    <ThumbsUp className="h-3.5 w-3.5 text-primary" />
+                  </button>
+                  <button onClick={() => giveFeedback(false)} className="h-7 w-7 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <ThumbsDown className="h-3.5 w-3.5 text-destructive" />
+                  </button>
+                </div>
+              )}
             </motion.div>
           ) : detecting ? (
             <div className="relative">

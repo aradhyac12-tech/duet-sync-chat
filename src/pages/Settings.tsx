@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useTheme, ThemeColor } from "@/contexts/ThemeContext";
 import { ChevronLeft, Check, ImageIcon, X, Bell, Fingerprint, Vibrate, Link2, Unlink, EyeOff, Copy, Share2, Eye, ChevronRight, Palette, Download, RotateCcw } from "lucide-react";
+import { Search, UserPlus, Upload } from "lucide-react";
 import CodeSurpriseEditor from "@/components/CodeSurpriseEditor";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -51,11 +52,18 @@ const Settings = () => {
   const [partnerName, setPartnerName] = useState("");
   const [petName, setPetName] = useState("");
   const [editingPetName, setEditingPetName] = useState(false);
+  const [showSearchPartner, setShowSearchPartner] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [myUsername, setMyUsername] = useState("");
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
-      const { data } = await supabase.from("profiles").select("partner_id, display_name, gender, phone_number, pet_name").eq("user_id", user.id).single();
+      const { data } = await supabase.from("profiles").select("partner_id, display_name, gender, phone_number, pet_name, username").eq("user_id", user.id).single();
+      if (data?.username) setMyUsername(data.username);
       if (data?.partner_id) {
         setCurrentPartner(data.partner_id);
         const { data: pp } = await supabase.from("profiles").select("display_name, pet_name").eq("user_id", data.partner_id).single();
@@ -66,7 +74,75 @@ const Settings = () => {
       }
     };
     load();
+
+    // Load pending partner requests
+    const loadRequests = async () => {
+      const { data: reqs } = await supabase.from("partner_requests").select("*").eq("status", "pending") as any;
+      if (reqs) setPendingRequests(reqs);
+    };
+    loadRequests();
+
+    // Listen for new partner requests
+    const reqChannel = supabase.channel("partner-requests-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "partner_requests" }, () => loadRequests())
+      .subscribe();
+    return () => { supabase.removeChannel(reqChannel); };
   }, [user]);
+  const searchPartners = async () => {
+    if (!searchTerm.trim()) return;
+    setSearching(true);
+    const { data, error } = await supabase.rpc("search_users", { search_term: searchTerm.trim() }) as any;
+    setSearchResults(data || []);
+    setSearching(false);
+    if (!data?.length) toast({ title: "No users found" });
+  };
+
+  const sendPartnerRequest = async (receiverId: string) => {
+    if (!user) return;
+    hapticMedium();
+    const { error } = await supabase.from("partner_requests").insert({ sender_id: user.id, receiver_id: receiverId } as any);
+    if (error?.code === "23505") {
+      toast({ title: "Request already sent", variant: "destructive" });
+    } else if (error) {
+      toast({ title: "Failed to send request", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Request sent! 💌" });
+      setSearchResults([]);
+      setSearchTerm("");
+    }
+  };
+
+  const acceptRequest = async (req: any) => {
+    if (!user) return;
+    hapticMedium();
+    await supabase.from("partner_requests").update({ status: "accepted" } as any).eq("id", req.id);
+    await supabase.from("profiles").update({ partner_id: req.sender_id }).eq("user_id", user.id);
+    await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", req.sender_id);
+    setCurrentPartner(req.sender_id);
+    const { data: pp } = await supabase.from("profiles").select("display_name").eq("user_id", req.sender_id).single();
+    if (pp) setPartnerName(pp.display_name);
+    toast({ title: "Connected! 🎉", description: `Linked with ${pp?.display_name || "your partner"}` });
+  };
+
+  const declineRequest = async (id: string) => {
+    hapticLight();
+    await supabase.from("partner_requests").delete().eq("id", id) as any;
+    toast({ title: "Request declined" });
+  };
+
+  const saveUsername = async () => {
+    if (!user || !myUsername.trim()) return;
+    hapticLight();
+    const { error } = await supabase.from("profiles").update({ username: myUsername.trim().toLowerCase() }).eq("user_id", user.id);
+    if (error?.code === "23505") {
+      toast({ title: "Username taken", variant: "destructive" });
+    } else if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Username saved" });
+    }
+  };
+
 
   useEffect(() => {
     const urlInvite = new URLSearchParams(location.search).get("invite");
@@ -257,6 +333,44 @@ const Settings = () => {
                   <p className="text-[11px] text-muted-foreground">Got a code from your partner?</p>
                 </div>
               </button>
+              <button onClick={() => setShowSearchPartner(true)}
+                className="w-full bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
+                <div className="h-10 w-10 rounded-full bg-accent/50 flex items-center justify-center">
+                  <Search className="h-5 w-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Find partner</p>
+                  <p className="text-[11px] text-muted-foreground">Search by username or phone number</p>
+                </div>
+              </button>
+
+              {/* Incoming requests */}
+              {pendingRequests.filter(r => r.receiver_id === user?.id).map(req => (
+                <div key={req.id} className="bg-card rounded-2xl border border-primary/30 p-4 flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <UserPlus className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Partner request</p>
+                    <p className="text-[11px] text-muted-foreground">Someone wants to connect</p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => acceptRequest(req)} className="h-7 px-2.5 rounded-full bg-primary text-primary-foreground text-[10px] font-medium">Accept</button>
+                    <button onClick={() => declineRequest(req.id)} className="h-7 px-2.5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium">Decline</button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Username setup */}
+              <div className="bg-card rounded-2xl border border-border/60 p-4 space-y-2">
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Your username</p>
+                <div className="flex gap-2">
+                  <Input value={myUsername} onChange={(e) => setMyUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                    placeholder="e.g. myname123" className="h-8 rounded-full text-sm flex-1" />
+                  <Button onClick={saveUsername} size="sm" className="rounded-full bg-foreground text-background h-8 px-4 text-xs">Save</Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Others can find you by this username</p>
+              </div>
             </div>
           )}
         </section>
@@ -529,6 +643,45 @@ const Settings = () => {
               Connect
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Search partner dialog */}
+      <Dialog open={showSearchPartner} onOpenChange={setShowSearchPartner}>
+        <DialogContent className="rounded-2xl max-w-[340px]">
+          <DialogHeader>
+            <DialogTitle className="text-base">Find your partner</DialogTitle>
+            <DialogDescription className="text-sm">Search by username or phone number with country code</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Username or +1234567890" className="rounded-xl flex-1" onKeyDown={(e) => e.key === "Enter" && searchPartners()} />
+            <Button onClick={searchPartners} disabled={searching} size="sm" className="rounded-xl bg-foreground text-background">
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+          {searchResults.length > 0 && (
+            <div className="space-y-2 mt-2">
+              {searchResults.map((r: any) => (
+                <div key={r.user_id} className="flex items-center gap-3 bg-muted/40 rounded-xl p-3">
+                  {r.avatar_url ? (
+                    <img src={r.avatar_url} className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center text-xs font-semibold">
+                      {(r.display_name || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{r.display_name}</p>
+                    {r.username && <p className="text-[10px] text-muted-foreground">@{r.username}</p>}
+                  </div>
+                  <Button onClick={() => sendPartnerRequest(r.user_id)} size="sm" className="rounded-full h-7 px-3 text-[10px] bg-foreground text-background">
+                    <UserPlus className="h-3 w-3 mr-1" /> Request
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </motion.div>

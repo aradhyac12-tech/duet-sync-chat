@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import CodeSurpriseFrame from "@/components/CodeSurpriseFrame";
 import { buildSurpriseDocument } from "@/lib/codeSurprises";
 
@@ -19,6 +20,7 @@ interface Surprise {
 
 const SurpriseOverlay = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [surprise, setSurprise] = useState<Surprise | null>(null);
   const [show, setShow] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -58,6 +60,13 @@ const SurpriseOverlay = () => {
 
     setSurprise(nextSurprise);
     setShow(true);
+    // Track analytics
+    if (user) {
+      supabase.from("code_surprise_events").insert([
+        { surprise_id: nextSurprise.id, user_id: user.id, event_type: "received" },
+        { surprise_id: nextSurprise.id, user_id: user.id, event_type: "opened" },
+      ] as any);
+    }
     sessionStorage.setItem(seenKey, JSON.stringify([...seen, nextSurprise.id]));
 
     const nextViews = nextSurprise.views_used + 1;
@@ -112,6 +121,13 @@ const SurpriseOverlay = () => {
 
   const handleClose = () => {
     setShow(false);
+    if (surprise && user) {
+      supabase.from("code_surprise_events").insert({
+        surprise_id: surprise.id,
+        user_id: user.id,
+        event_type: "finished",
+      } as any);
+    }
     setTimeout(() => setSurprise(null), 300);
   };
 
