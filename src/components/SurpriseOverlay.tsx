@@ -121,6 +121,13 @@ const SurpriseOverlay = () => {
 
   const handleClose = () => {
     setShow(false);
+    if (surprise && user) {
+      supabase.from("code_surprise_events").insert({
+        surprise_id: surprise.id,
+        user_id: user.id,
+        event_type: "finished",
+      } as any);
+    }
     setTimeout(() => setSurprise(null), 300);
   };
 
