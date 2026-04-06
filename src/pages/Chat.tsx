@@ -801,7 +801,7 @@ const Chat = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
+    <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
       {/* Incoming call overlay */}
       <IncomingCallOverlay onAccept={handleAcceptIncoming} onDecline={handleDeclineIncoming} />
 
