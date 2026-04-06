@@ -26,6 +26,7 @@ const moodToValence: Record<string, { valence: number; arousal: number }> = {
 
 const MoodDetector = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [show, setShow] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectedMood, setDetectedMood] = useState<string | null>(null);
