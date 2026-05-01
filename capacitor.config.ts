@@ -1,13 +1,9 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.4c6af4cfa18a4d3aae68a54cea48c034',
+  appId: 'com.duospace.app',
   appName: 'DuoSpace',
   webDir: 'dist',
-  server: {
-    url: 'https://4c6af4cf-a18a-4d3a-ae68-a54cea48c034.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
-  },
   plugins: {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
@@ -17,22 +13,39 @@ const config: CapacitorConfig = {
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
       backgroundColor: '#F5F0EB',
+      splashFullScreen: true,
+      splashImmersive: true,
+      launchShowDuration: 1500,
     },
     Keyboard: {
       resize: 'body',
       resizeOnFullScreen: true,
     },
+    PrivacyScreen: {
+      enable: false,
+    },
+    // Preferences plugin - no extra config needed, uses native storage
+    // Filesystem plugin - no extra config needed, uses app's Documents directory
   },
   ios: {
     contentInset: 'automatic',
     preferredContentMode: 'mobile',
     scheme: 'DuoSpace',
+    backgroundColor: '#F5F0EB',
+    // Info.plist usage descriptions must be set in Xcode:
+    // NSCameraUsageDescription: "DuoSpace needs camera for photos and video calls"
+    // NSMicrophoneUsageDescription: "DuoSpace needs microphone for voice and video calls"
+    // NSPhotoLibraryUsageDescription: "DuoSpace needs access to save and share photos"
+    // NSFaceIDUsageDescription: "DuoSpace uses Face ID to keep your conversations private"
   },
   android: {
     backgroundColor: '#F5F0EB',
-    allowMixedContent: true,
+    allowMixedContent: false,
     captureInput: true,
     webContentsDebuggingEnabled: false,
+    // AndroidManifest.xml permissions added automatically by Capacitor plugins:
+    // CAMERA, RECORD_AUDIO, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE,
+    // ACCESS_FINE_LOCATION, INTERNET, POST_NOTIFICATIONS (Android 13+)
   },
 };
 

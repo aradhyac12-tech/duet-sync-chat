@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import storage from "@/lib/storage";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 
@@ -107,8 +108,8 @@ const Auth = () => {
       if (error) {
         toast({ title: "Couldn't sign in", description: error.message, variant: "destructive" });
       }
-    } catch (err: any) {
-      toast({ title: "Sign in error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Sign in error", description: (err instanceof Error ? err.message : String(err)), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -135,8 +136,8 @@ const Auth = () => {
       } else {
         toast({ title: "Check your email", description: "We sent you a confirmation link." });
       }
-    } catch (err: any) {
-      toast({ title: "Sign up error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Sign up error", description: (err instanceof Error ? err.message : String(err)), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -155,8 +156,8 @@ const Auth = () => {
         toast({ title: "Reset link sent", description: "Check your email for the reset link." });
         setShowForgot(false);
       }
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: (err instanceof Error ? err.message : String(err)), variant: "destructive" });
     }
     setForgotLoading(false);
   };
@@ -172,8 +173,8 @@ const Auth = () => {
       if (result?.error) {
         toast({ title: "Google sign-in failed", description: String(result.error), variant: "destructive" });
       }
-    } catch (err: any) {
-      toast({ title: "Google sign-in failed", description: err.message || "Something went wrong", variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Google sign-in failed", description: (err instanceof Error ? err.message : String(err)) || "Something went wrong", variant: "destructive" });
     }
     setGoogleLoading(false);
   };
@@ -188,8 +189,8 @@ const Auth = () => {
       if (result?.error) {
         toast({ title: "Apple sign-in failed", description: String(result.error), variant: "destructive" });
       }
-    } catch (err: any) {
-      toast({ title: "Apple sign-in failed", description: err.message || "Something went wrong", variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Apple sign-in failed", description: (err instanceof Error ? err.message : String(err)) || "Something went wrong", variant: "destructive" });
     }
     setAppleLoading(false);
   };
@@ -242,7 +243,19 @@ const Auth = () => {
         className="w-full max-w-sm space-y-6"
       >
         <div className="text-center space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">DuoSpace</h1>
+          {/* Show custom app icon if set */}
+          {(() => {
+            const icon = storage.get("duo-app-icon");
+            const name = storage.get("duo-app-name") || "DuoSpace";
+            return icon ? (
+              <div className="flex flex-col items-center gap-3 mb-2">
+                <img src={icon} alt={name} className="h-16 w-16 rounded-2xl object-cover shadow-md mx-auto" />
+                <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
+              </div>
+            ) : (
+              <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
+            );
+          })()}
           <p className="text-sm text-muted-foreground">A private space for two</p>
         </div>
 

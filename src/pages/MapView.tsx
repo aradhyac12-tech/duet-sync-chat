@@ -85,7 +85,10 @@ const MapView = () => {
         const result = await navigator.permissions.query({ name: "geolocation" });
         setPermissionState(result.state as any);
         result.onchange = () => setPermissionState(result.state as any);
-      } catch {}
+      } catch (err) {
+        // permissions.query() is unsupported on some browsers — not fatal.
+        console.warn("[MapView] permissions.query unsupported:", err);
+      }
     }
     navigator.geolocation.getCurrentPosition(
       () => { setPermissionState("granted"); setLocationError(null); },
@@ -101,18 +104,17 @@ const MapView = () => {
     );
   }, []);
 
-  // Watch location
+  // Watch location — B11 Fix: use ref so cleanup always has the correct watchId
+  const watchIdRef = useRef<number | null>(null);
   useEffect(() => {
     if (!user) return;
-    let watchId: number;
     if ("geolocation" in navigator) {
-      watchId = navigator.geolocation.watchPosition(
+      watchIdRef.current = navigator.geolocation.watchPosition(
         async (pos) => {
           setLocationError(null);
           setPermissionState("granted");
           const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, updated_at: new Date().toISOString() };
           setMyLocation(loc);
-          // Use upsert to avoid duplicate key errors
           await supabase.from("locations").upsert(
             { user_id: user.id, latitude: loc.latitude, longitude: loc.longitude },
             { onConflict: "user_id" }
@@ -126,13 +128,18 @@ const MapView = () => {
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
       );
     }
-    return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
   }, [user]);
 
   // Fetch partner location
   useEffect(() => {
     if (!partnerId) return;
-    supabase.from("locations").select("*").eq("user_id", partnerId).maybeSingle()
+    supabase.from("locations").select("user_id,latitude,longitude,updated_at").eq("user_id", partnerId).maybeSingle()
       .then(({ data }) => { if (data) setPartnerLocation(data); });
 
     const channel = supabase.channel("partner-location")

@@ -42,7 +42,7 @@ const SurpriseOverlay = () => {
 
     const { data, error } = await supabase
       .from("code_surprises")
-      .select("*")
+      .select("id,creator_id,title,html_content,css_content,js_content,is_active,max_views,views_used,created_at")
       .eq("creator_id", partnerId)
       .eq("is_active", true)
       .order("created_at", { ascending: false })

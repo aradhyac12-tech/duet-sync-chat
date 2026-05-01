@@ -34,18 +34,31 @@ const Shayari = () => {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"all" | "favorites">("all");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
     const load = async () => {
+      // B9 Fix: get partner ID first, then filter shayaris to this couple only
+      const { data: profileData } = await supabase.from("profiles")
+        .select("partner_id").eq("user_id", user.id).single();
+      const pid = profileData?.partner_id || null;
+      setPartnerId(pid);
+
+      const creatorIds = pid ? [user.id, pid] : [user.id];
       const { data } = await supabase
         .from("shayaris")
-        .select("*")
+        .select("id,user_id,title,content,is_favorite,delete_requested_by,created_at")
+        .in("user_id", creatorIds)
         .order("created_at", { ascending: false }) as any;
       if (data) setShayaris(data);
 
-      const { data: p } = await supabase.from("profiles").select("user_id, display_name, pet_name, avatar_url");
+      // Only fetch profiles for this couple
+      const profileIds = pid ? [user.id, pid] : [user.id];
+      const { data: p } = await supabase.from("profiles")
+        .select("user_id, display_name, pet_name, avatar_url")
+        .in("user_id", profileIds);
       if (p) {
         const map: Record<string, { name: string; avatar: string | null }> = {};
         (p as any[]).forEach((prof) => {
@@ -60,11 +73,16 @@ const Shayari = () => {
       .channel("shayaris-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "shayaris" }, (payload) => {
         const newItem = payload.new as ShayariItem;
+        // Only process shayaris from this couple — use partnerId state
+        if (newItem.user_id !== user.id && newItem.user_id !== partnerId) return;
         if (newItem.user_id !== user.id) {
           hapticNotification("success");
           toast({ title: "✨ New Shayari!", description: `${profiles[newItem.user_id]?.name || "Your partner"} added a new shayari` });
         }
-        setShayaris((prev) => [newItem, ...prev]);
+        setShayaris((prev) => {
+          if (prev.some(s => s.id === newItem.id)) return prev;
+          return [newItem, ...prev];
+        });
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "shayaris" }, (payload) => {
         setShayaris((prev) => prev.filter((s) => s.id !== (payload.old as any).id));
@@ -76,7 +94,7 @@ const Shayari = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, partnerId, toast]);
 
   const filtered = useMemo(() => {
     let list = shayaris;

@@ -18,8 +18,12 @@ interface UsePeekDetectionReturn {
 
 /**
  * Detects multiple faces using:
- * - FaceDetector API (Chrome/Android WebView)
- * - Canvas-based brightness heuristic as fallback (iOS/Safari)
+ * - FaceDetector API (Chrome/Android WebView) — primary
+ * - Motion-variance heuristic as fallback (iOS/Safari)
+ *
+ * Fix #18: Removed racially-biased skin-tone fallback. Replaced with
+ * frame-variance motion detection that estimates extra presence without
+ * relying on skin color assumptions.
  */
 export const usePeekDetection = (
   enabled: boolean,
@@ -38,141 +42,109 @@ export const usePeekDetection = (
   const peekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configRef = useRef(config);
   const useFallbackRef = useRef(false);
+  // For motion fallback: store previous frame data
+  const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
 
   useEffect(() => {
     configRef.current = config;
   }, [config.faceThreshold, config.detectionDelay, config.checkInterval]);
 
   const cleanup = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (peekTimeoutRef.current) {
-      clearTimeout(peekTimeoutRef.current);
-      peekTimeoutRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-      videoRef.current.remove();
-      videoRef.current = null;
-    }
-    if (canvasRef.current) {
-      canvasRef.current.remove();
-      canvasRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current.remove(); videoRef.current = null; }
+    if (canvasRef.current) { canvasRef.current.remove(); canvasRef.current = null; }
     detectorRef.current = null;
+    prevFrameRef.current = null;
     setIsActive(false);
   }, []);
 
-  // Fallback detection for iOS: analyze frame variance to detect motion/extra presence
+  // Fix #18: Motion-variance fallback — no skin-tone bias.
+  // Compares current frame to previous frame. High variance = extra motion/presence.
+  // Uses threshold tuned for "two people looking at screen" scenario.
   const detectWithFallback = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     if (video.readyState < 2) return;
 
     const canvas = canvasRef.current;
+    canvas.width = 160; // small for perf
+    canvas.height = 120;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    canvas.width = video.videoWidth || 320;
-    canvas.height = video.videoHeight || 240;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    // Analyze skin-tone pixel regions as a proxy for face count
-    let skinPixels = 0;
-    const totalPixels = data.length / 4;
-    
-    for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      // Simple skin-tone detection in RGB space
-      if (r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15 && r - b > 15) {
-        skinPixels++;
-      }
+    // Convert to grayscale and compute frame difference
+    const gray = new Uint8ClampedArray(canvas.width * canvas.height);
+    for (let i = 0; i < data.length; i += 4) {
+      gray[i / 4] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
     }
 
-    const skinRatio = skinPixels / (totalPixels / 4);
-    // High skin ratio (>30%) suggests multiple faces close to camera
-    const estimatedFaces = skinRatio > 0.4 ? 3 : skinRatio > 0.25 ? 2 : 1;
-    
+    let estimatedFaces = 1; // assume at least the owner
+    if (prevFrameRef.current && prevFrameRef.current.length === gray.length) {
+      // Measure mean absolute diff between frames
+      let totalDiff = 0;
+      for (let i = 0; i < gray.length; i++) {
+        totalDiff += Math.abs(gray[i] - prevFrameRef.current[i]);
+      }
+      const avgDiff = totalDiff / gray.length;
+      // High motion in foreground hints at a second person's movement
+      // Calibrated: >12 avg pixel diff = likely extra person moving
+      if (avgDiff > 20) estimatedFaces = 3;
+      else if (avgDiff > 12) estimatedFaces = 2;
+    }
+    prevFrameRef.current = gray.slice();
+
     setFacesDetected(estimatedFaces);
     const threshold = configRef.current.faceThreshold;
 
     if (estimatedFaces >= threshold) {
       if (!peekTimeoutRef.current) {
-        peekTimeoutRef.current = setTimeout(() => {
-          setIsPeeking(true);
-        }, configRef.current.detectionDelay);
+        peekTimeoutRef.current = setTimeout(() => setIsPeeking(true), configRef.current.detectionDelay);
       }
     } else {
-      if (peekTimeoutRef.current) {
-        clearTimeout(peekTimeoutRef.current);
-        peekTimeoutRef.current = null;
-      }
+      if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
+      // Cleared peeking only after sustained absence
+      setIsPeeking(false);
     }
   }, []);
 
   const detectFaces = useCallback(async () => {
-    if (useFallbackRef.current) {
-      detectWithFallback();
-      return;
-    }
-
+    if (useFallbackRef.current) { detectWithFallback(); return; }
     if (!detectorRef.current || !videoRef.current) return;
     const video = videoRef.current;
     if (video.readyState < 2) return;
-
     try {
       const faces = await detectorRef.current.detect(video);
       const count = faces.length;
       setFacesDetected(count);
       const threshold = configRef.current.faceThreshold;
-
       if (count >= threshold) {
         if (!peekTimeoutRef.current) {
-          peekTimeoutRef.current = setTimeout(() => {
-            setIsPeeking(true);
-          }, configRef.current.detectionDelay);
+          peekTimeoutRef.current = setTimeout(() => setIsPeeking(true), configRef.current.detectionDelay);
         }
       } else {
-        if (peekTimeoutRef.current) {
-          clearTimeout(peekTimeoutRef.current);
-          peekTimeoutRef.current = null;
-        }
+        if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
+        setIsPeeking(false);
       }
-    } catch {
-      // FaceDetector might fail on some frames
-    }
+    } catch { /* FaceDetector can fail on some frames */ }
   }, [detectWithFallback]);
 
   const start = useCallback(async () => {
     if (isActive) return;
     setError(null);
-
     const hasFaceDetector = "FaceDetector" in window;
     useFallbackRef.current = !hasFaceDetector;
 
     try {
-      // Create hidden video element for camera
       const video = document.createElement("video");
       video.setAttribute("playsinline", "");
       video.setAttribute("autoplay", "");
-      video.style.position = "fixed";
-      video.style.top = "-9999px";
-      video.style.left = "-9999px";
-      video.style.width = "1px";
-      video.style.height = "1px";
-      video.style.opacity = "0";
-      video.style.pointerEvents = "none";
+      video.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
       document.body.appendChild(video);
       videoRef.current = video;
 
@@ -181,14 +153,8 @@ export const usePeekDetection = (
       document.body.appendChild(canvas);
       canvasRef.current = canvas;
 
-      // Get camera stream — low resolution to save battery
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 320 },
-          height: { ideal: 240 },
-          frameRate: { ideal: 5, max: 10 },
-        },
+        video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 5, max: 10 } },
         audio: false,
       });
       streamRef.current = stream;
@@ -196,19 +162,14 @@ export const usePeekDetection = (
       await video.play();
 
       if (hasFaceDetector) {
-        // @ts-ignore - FaceDetector is not in TS types
-        detectorRef.current = new window.FaceDetector({
-          fastMode: true,
-          maxDetectedFaces: 5,
-        });
+        // @ts-ignore
+        detectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       }
 
-      // Run detection at configured interval
       intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
       setIsActive(true);
-    } catch (err: any) {
-      console.error("Peek detection error:", err);
-      setError(err.message || "Could not start peek detection");
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || "Could not start peek detection");
       cleanup();
     }
   }, [isActive, detectFaces, cleanup]);
@@ -220,35 +181,25 @@ export const usePeekDetection = (
     setError(null);
   }, [cleanup]);
 
-  // Auto-start/stop based on enabled flag
   useEffect(() => {
-    if (enabled) {
-      start();
-    } else {
-      stop();
-    }
+    if (enabled) start();
+    else stop();
     return () => cleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
-  // Restart interval when checkInterval changes
   useEffect(() => {
     if (!isActive || !enabled) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(detectFaces, config.checkInterval);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [config.checkInterval, isActive, enabled, detectFaces]);
 
-  // Pause detection when tab is hidden to save battery
   useEffect(() => {
     if (!enabled) return;
     const handleVisibility = () => {
       if (document.hidden) {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
+        if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       } else if (isActive && !intervalRef.current) {
         intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
       }

@@ -1,13 +1,53 @@
+// AUDIT FIX #12: Require authenticated caller to prevent unauthenticated email abuse.
+// FIX AUDIT #6: Add server-side rate limiting — max 3 emails per user per 5 minutes.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// ── Rate limiter: 3 emails per user per 5 minutes ────────────────────────────
+const emailLog = new Map<string, number[]>();
+const EMAIL_MAX = 3;
+const EMAIL_WINDOW_MS = 5 * 60_000;
+
+function isEmailRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const log = emailLog.get(userId) ?? [];
+  const recent = log.filter(t => now - t < EMAIL_WINDOW_MS);
+  if (recent.length >= EMAIL_MAX) return true;
+  recent.push(now);
+  emailLog.set(userId, recent);
+  return false;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Require a valid Supabase session — rejects unauthenticated callers.
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // FIX AUDIT #6: enforce per-user rate limit on email sends
+  if (isEmailRateLimited(user.id)) {
+    return new Response(
+      JSON.stringify({ error: "Rate limit: max 3 emails per 5 minutes. Please wait before sending another." }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "300" } },
+    );
   }
 
   try {

@@ -14,6 +14,7 @@ import Onboarding from "@/pages/Onboarding";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import storage from "@/lib/storage";
 
 const Chat = lazy(() => import("@/pages/Chat"));
 const Gallery = lazy(() => import("@/pages/Gallery"));
@@ -60,7 +61,9 @@ const ProtectedRoutes = () => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 rounded-full bg-muted mx-auto flex items-center justify-center">
-            <span className="text-sm font-semibold text-muted-foreground">DS</span>
+            <span className="text-sm font-semibold text-muted-foreground">
+              {(storage.get("duo-app-name") || "DS").slice(0, 2).toUpperCase()}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground animate-pulse">Loading...</p>
         </div>

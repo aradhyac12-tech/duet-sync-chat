@@ -1,11 +1,12 @@
 import PageHeader from "@/components/PageHeader";
-import { motion } from "framer-motion";
-import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Wifi, Mic, MicOff, VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Wifi, Mic, MicOff, VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff, Trash2, Captions } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDailyCall } from "@/hooks/useDailyCall";
 import { useToast } from "@/hooks/use-toast";
+import LipReadingOverlay from "@/components/LipReadingOverlay";
 
 type NetworkQuality = "excellent" | "good" | "fair" | "poor";
 
@@ -73,15 +74,20 @@ const Calls = () => {
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [callMode, setCallMode] = useState<"video" | "voice">("video");
+  const [showLipReading, setShowLipReading] = useState(false);
   const callStartTimeRef = useRef<Date | null>(null);
 
   const {
     joinCall, leaveCall, toggleAudio, toggleVideo, toggleScreenShare,
+    switchCamera, listCameras,
     isAudioOn, isVideoOn, isScreenSharing, callState,
     localVideoRef, remoteVideoRef, screenShareRef,
     networkQuality: callNetworkQuality, participantCount, error,
     callDuration,
   } = useDailyCall();
+
+  const [cameras,        setCameras]        = useState<{ deviceId: string; label: string }[]>([]);
+  const [showCamPicker,  setShowCamPicker]  = useState(false);
 
   // Load partner + call history
   useEffect(() => {
@@ -92,7 +98,7 @@ const Calls = () => {
 
       const { data: history } = await supabase
         .from("call_history")
-        .select("*")
+        .select("id,caller_id,receiver_id,room_name,call_type,call_direction,status,started_at,ended_at,duration_seconds,created_at")
         .or(`caller_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order("started_at", { ascending: false })
         .limit(50);
@@ -159,7 +165,7 @@ const Calls = () => {
       });
       if (tokenError || tokenData?.error) throw new Error(tokenData?.error || tokenError?.message || "Failed to get token");
 
-      // Save call to history
+      // Save call to history — Fix #4: store full room URL so receiver can join
       callStartTimeRef.current = new Date();
       const { data: callRecord } = await supabase.from("call_history").insert({
         caller_id: user.id,
@@ -167,17 +173,19 @@ const Calls = () => {
         call_type: mode,
         call_direction: "outgoing",
         status: "in_progress",
-        room_name: data.name,
+        room_name: data.url,  // Fix #4: full URL, not just name
         started_at: new Date().toISOString(),
       } as any).select().single();
       if (callRecord) setCurrentCallId((callRecord as any).id);
 
-      await joinCall(data.url, tokenData.token);
-      if (mode === "voice") toggleVideo();
+      await joinCall(data.url, tokenData.token, mode === "voice"); // CALL-02 FIX: videoOff flag
+      // Load available cameras for picker (includes OTG/dongle cameras)
+      const cams = await listCameras();
+      setCameras(cams);
       toast({ title: mode === "video" ? "Video call started 📹" : "Voice call started 📞" });
-    } catch (err: any) {
-      console.error("Start call error:", err);
-      toast({ title: "Call failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      /* AUDIT FIX #16: call start error captured via UI state */
+      toast({ title: "Call failed", description: (err instanceof Error ? err.message : String(err)), variant: "destructive" });
     }
     setIsStartingCall(false);
   };
@@ -195,7 +203,7 @@ const Calls = () => {
       // Refresh history
       const { data: history } = await supabase
         .from("call_history")
-        .select("*")
+        .select("id,caller_id,receiver_id,room_name,call_type,call_direction,status,started_at,ended_at,duration_seconds,created_at")
         .or(`caller_id.eq.${user.id},receiver_id.eq.${user.id}`)
         .order("started_at", { ascending: false })
         .limit(50);
@@ -262,7 +270,27 @@ const Calls = () => {
               <span className="text-[10px] text-background font-medium">Sharing</span>
             </div>
           )}
+          {/* Lip reading toggle */}
+          <button
+            onClick={() => setShowLipReading(v => !v)}
+            className={`ml-auto rounded-full px-3 py-1.5 flex items-center gap-1.5 backdrop-blur-md ${
+              showLipReading ? "bg-green-500/80" : "bg-background/20"
+            }`}
+          >
+            <Captions className="h-3.5 w-3.5 text-background" />
+            <span className="text-[10px] text-background font-medium">Lip Read</span>
+          </button>
         </div>
+
+        {/* Lip reading overlay */}
+        <AnimatePresence>
+          {showLipReading && callState === "joined" && (
+            <LipReadingOverlay
+              videoRef={remoteVideoRef}
+              onClose={() => setShowLipReading(false)}
+            />
+          )}
+        </AnimatePresence>
 
         <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
           <div className="flex items-center justify-center gap-3">
@@ -281,10 +309,38 @@ const Calls = () => {
               style={{ width: 52, height: 52 }}>
               {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" /> : <Monitor className="h-5 w-5 text-background" />}
             </button>
+            {/* CALL-03: Camera picker button — shows only when multiple cameras available */}
+            {cameras.length > 1 && (
+              <button onClick={() => setShowCamPicker(v => !v)}
+                className="rounded-full flex items-center justify-center bg-background/20 backdrop-blur-md"
+                style={{ width: 52, height: 52 }}>
+                <VideoIcon className="h-5 w-5 text-background opacity-60" />
+              </button>
+            )}
             <button onClick={endCall} className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
               <PhoneOff className="h-7 w-7 text-background" />
             </button>
           </div>
+
+          {/* CALL-03: Camera picker sheet */}
+          {showCamPicker && cameras.length > 1 && (
+            <div className="mx-4 mt-3 rounded-2xl overflow-hidden border border-white/10"
+              style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)" }}>
+              <p className="text-[11px] text-white/50 px-4 pt-3 pb-1 uppercase tracking-wider">Select Camera</p>
+              {cameras.map(cam => (
+                <button key={cam.deviceId}
+                  onClick={async () => { await switchCamera(cam.deviceId); setShowCamPicker(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 active:bg-white/10 text-left">
+                  <VideoIcon className="h-4 w-4 text-white/50 shrink-0" />
+                  <span className="text-sm text-white truncate">{cam.label}</span>
+                </button>
+              ))}
+              <button onClick={() => setShowCamPicker(false)}
+                className="w-full text-center text-[11px] text-white/30 py-2.5 border-t border-white/10">
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       </motion.div>
     );

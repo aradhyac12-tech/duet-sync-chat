@@ -103,7 +103,7 @@ const Playlist = () => {
     const load = async () => {
       const { data } = await supabase
         .from("playlist_songs")
-        .select("*")
+        .select("id,added_by,title,artist,song_url,platform,thumbnail_url,created_at")
         .order("created_at", { ascending: false });
       if (data) {
         const s = data as Song[];
@@ -111,6 +111,7 @@ const Playlist = () => {
         setQueue(s);
       }
 
+      let myPartnerId: string | null = null;
       const { data: p } = await supabase.from("profiles").select("user_id, display_name, pet_name, partner_id");
       if (p) {
         const map: Record<string, string> = {};
@@ -118,23 +119,26 @@ const Playlist = () => {
           map[prof.user_id] = prof.pet_name || prof.display_name;
           if (prof.user_id === user.id && prof.partner_id) {
             setPartnerId(prof.partner_id);
+            myPartnerId = prof.partner_id;
           }
         });
         setProfiles(map);
       }
 
-      // Check blend status
-      const { data: blends } = await supabase
-        .from("blend_invites")
-        .select("*")
-        .in("status", ["pending", "accepted"]) as any;
-      if (blends && blends.length > 0) {
-        const activeBlend = blends.find((b: any) => b.status === "accepted");
-        if (activeBlend) setBlendActive(true);
-        const pendingBlend = blends.find(
-          (b: any) => b.status === "pending" && b.sender_id !== user.id
-        );
-        if (pendingBlend) setBlendPending(pendingBlend);
+      // B12 Fix: Only check blend status when user has a partner
+      if (myPartnerId) {
+        const { data: blends } = await supabase
+          .from("blend_invites")
+          .select("id,added_by,title,artist,song_url,platform,thumbnail_url,created_at")
+          .in("status", ["pending", "accepted"]) as any;
+        if (blends && blends.length > 0) {
+          const activeBlend = blends.find((b: { status: string }) => b.status === "accepted");
+          if (activeBlend) setBlendActive(true);
+          const pendingBlend = blends.find(
+            (b: { status: string; sender_id: string }) => b.status === "pending" && b.sender_id !== user.id
+          );
+          if (pendingBlend) setBlendPending(pendingBlend);
+        }
       }
     };
     load();
@@ -146,7 +150,7 @@ const Playlist = () => {
 
     const channel = supabase
       .channel("blend-sync")
-      .on("broadcast", { event: "playback" }, (payload: any) => {
+      .on("broadcast", { event: "playback" }, (payload: { payload: Record<string, unknown> }) => {
         const data = payload.payload;
         if (data.userId === user.id) return; // Ignore own broadcasts
 
@@ -329,8 +333,8 @@ const Playlist = () => {
       });
       if (error) throw error;
       setSearchResults(data?.results || []);
-    } catch (err: any) {
-      toast({ title: "Search failed", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Search failed", description: (err instanceof Error ? err.message : String(err)), variant: "destructive" });
     }
     setSearching(false);
   };
