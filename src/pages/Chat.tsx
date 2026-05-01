@@ -555,7 +555,7 @@ const Chat = () => {
     const ch = supabase.channel(`imported-rt-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "imported_chats",
           filter: `owner_id=eq.${user.id}` },
-        (payload) => setImportedMessages(prev => [...prev, payload.new as ImportedMessage]))
+        (payload) => setImportedMessages(prev => [...prev, payload.new as unknown as ImportedMessage]))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
