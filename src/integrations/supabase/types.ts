@@ -393,9 +393,11 @@ export type Database = {
           deleted_by_receiver: boolean
           deleted_by_sender: boolean
           disappear_at: string | null
+          edited_at: string | null
           file_name: string | null
           file_url: string | null
           id: string
+          is_pinned: boolean
           is_read: boolean
           message_type: string
           receiver_id: string
@@ -408,9 +410,11 @@ export type Database = {
           deleted_by_receiver?: boolean
           deleted_by_sender?: boolean
           disappear_at?: string | null
+          edited_at?: string | null
           file_name?: string | null
           file_url?: string | null
           id?: string
+          is_pinned?: boolean
           is_read?: boolean
           message_type?: string
           receiver_id: string
@@ -423,9 +427,11 @@ export type Database = {
           deleted_by_receiver?: boolean
           deleted_by_sender?: boolean
           disappear_at?: string | null
+          edited_at?: string | null
           file_name?: string | null
           file_url?: string | null
           id?: string
+          is_pinned?: boolean
           is_read?: boolean
           message_type?: string
           receiver_id?: string
@@ -541,6 +547,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          couple_theme: string | null
           created_at: string
           display_name: string
           gallery_shared: boolean
@@ -554,12 +561,15 @@ export type Database = {
           pet_name: string | null
           phone_number: string | null
           public_key: string | null
+          push_platform: string | null
+          push_token: string | null
           updated_at: string
           user_id: string
           username: string | null
         }
         Insert: {
           avatar_url?: string | null
+          couple_theme?: string | null
           created_at?: string
           display_name?: string
           gallery_shared?: boolean
@@ -573,12 +583,15 @@ export type Database = {
           pet_name?: string | null
           phone_number?: string | null
           public_key?: string | null
+          push_platform?: string | null
+          push_token?: string | null
           updated_at?: string
           user_id: string
           username?: string | null
         }
         Update: {
           avatar_url?: string | null
+          couple_theme?: string | null
           created_at?: string
           display_name?: string
           gallery_shared?: boolean
@@ -592,9 +605,50 @@ export type Database = {
           pet_name?: string | null
           phone_number?: string | null
           public_key?: string | null
+          push_platform?: string | null
+          push_token?: string | null
           updated_at?: string
           user_id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      scheduled_messages: {
+        Row: {
+          content: string | null
+          created_at: string
+          disappear_at: string | null
+          id: string
+          is_processing: boolean
+          message_type: string
+          receiver_id: string
+          send_at: string
+          sender_id: string
+          sent: boolean
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          disappear_at?: string | null
+          id?: string
+          is_processing?: boolean
+          message_type?: string
+          receiver_id: string
+          send_at: string
+          sender_id: string
+          sent?: boolean
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          disappear_at?: string | null
+          id?: string
+          is_processing?: boolean
+          message_type?: string
+          receiver_id?: string
+          send_at?: string
+          sender_id?: string
+          sent?: boolean
         }
         Relationships: []
       }
@@ -632,16 +686,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          receiver_id: string | null
           sender_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          receiver_id?: string | null
           sender_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          receiver_id?: string | null
           sender_id?: string
         }
         Relationships: []
@@ -651,7 +708,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: {
+        Args: { p_code: string; p_user_id: string }
+        Returns: Json
+      }
+      accept_partner_request: {
+        Args: { p_request_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      claim_pending_scheduled_messages: {
+        Args: never
+        Returns: {
+          content: string | null
+          created_at: string
+          disappear_at: string | null
+          id: string
+          is_processing: boolean
+          message_type: string
+          receiver_id: string
+          send_at: string
+          sender_id: string
+          sent: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cleanup_disappeared_messages: { Args: never; Returns: undefined }
+      delete_expired_messages: { Args: never; Returns: undefined }
       get_partner_id: { Args: { _user_id: string }; Returns: string }
       search_users: {
         Args: { search_term: string }
@@ -662,6 +749,7 @@ export type Database = {
           username: string
         }[]
       }
+      unlink_partner: { Args: { p_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

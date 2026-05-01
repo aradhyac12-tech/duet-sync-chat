@@ -458,10 +458,10 @@ const Chat = () => {
     if (!user || !partnerId) return;
     if (!beforeCreatedAt) { setMessagesLoading(true); setMessagesError(null); }
 
-    let query = supabase.from("messages").select("id,sender_id,receiver_id,content,message_type,file_url,file_name,is_read,reply_to_id,disappear_at,deleted_by_sender,deleted_by_receiver,created_at")
+    let query: any = supabase.from("messages").select("id,sender_id,receiver_id,content,message_type,file_url,file_name,is_read,reply_to_id,disappear_at,deleted_by_sender,deleted_by_receiver,created_at")
       .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
-      .neq("deleted_by_sender" as any, true)
-      .neq("deleted_by_receiver" as any, true)
+      .neq("deleted_by_sender", true)
+      .neq("deleted_by_receiver", true)
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE + 1);
 
@@ -548,14 +548,14 @@ const Chat = () => {
         .select("id,sender_name,content,original_timestamp,created_at")
         .eq("owner_id", user.id)
         .order("original_timestamp", { ascending: true });
-      if (data) setImportedMessages(data as ImportedMessage[]);
+      if (data) setImportedMessages(data as unknown as ImportedMessage[]);
     };
     fetchImported();
     // Listen for new batches being inserted (import in progress)
     const ch = supabase.channel(`imported-rt-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "imported_chats",
           filter: `owner_id=eq.${user.id}` },
-        (payload) => setImportedMessages(prev => [...prev, payload.new as ImportedMessage]))
+        (payload) => setImportedMessages(prev => [...prev, payload.new as unknown as ImportedMessage]))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
@@ -573,7 +573,7 @@ const Chat = () => {
     // and deduplicate by message ID in the handler.
     const seenIds = new Set<string>();
     const handleInsert = async (payload: { new: Record<string, unknown> }) => {
-      const msg = payload.new as Message;
+      const msg = payload.new as unknown as Message;
       if (seenIds.has(msg.id)) return; // deduplicate the two listeners
       seenIds.add(msg.id);
       const decrypted = (msg.message_type==="text"||msg.message_type==="letter")

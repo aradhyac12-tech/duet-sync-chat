@@ -68,7 +68,7 @@ export const useBiometricLock = (
       });
       setBiometricError(null);
       return true;
-    } catch (err: unknown) {
+    } catch (err: any) {
       // Code 10 = user pressed "Use PIN" / cancelled to use fallback
       const code = err?.code ?? err?.message ?? "";
       const isCancelled = String(code).includes("10") || String(code).includes("cancel") || String(code).includes("Cancel");

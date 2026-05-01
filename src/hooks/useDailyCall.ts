@@ -3,28 +3,12 @@
 // CALL-03: Camera device picker — enumerateDevices + setInputDevicesAsync
 // CALL-04: endCall safe even in "joining" state
 import { useCallback, useEffect, useRef, useState } from "react";
-import DailyIframe, { DailyCall } from "@daily-co/daily-js";
+import DailyIframe, { DailyCall, DailyParticipant as SDKDailyParticipant, DailyEventObjectTrack, DailyEventObjectNetworkQualityEvent } from "@daily-co/daily-js";
 
-// FIX #4: Typed Daily.co participant and event shapes instead of 'any'.
-interface DailyTrack {
-  persistentTrack?: MediaStreamTrack;
-}
-interface DailyParticipant {
-  local: boolean;
-  audio?: DailyTrack;
-  video?: DailyTrack;
-  screen?: DailyTrack;
-  screenAudio?: DailyTrack;
-  session_id: string;
-  user_name?: string;
-}
-interface DailyTrackEvent {
-  participant: DailyParticipant;
-  track: MediaStreamTrack;
-}
-interface DailyNetworkEvent {
-  quality: number;
-}
+// Use SDK types directly to avoid drift.
+type DailyParticipant = SDKDailyParticipant;
+type DailyTrackEvent = DailyEventObjectTrack;
+type DailyNetworkEvent = DailyEventObjectNetworkQualityEvent;
 interface DailyErrorEvent {
   errorMsg: string;
 }
