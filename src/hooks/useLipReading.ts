@@ -82,7 +82,7 @@ async function loadMediaPipe(): Promise<any> {
         document.head.appendChild(s);
       });
       if ((window as any).FaceMesh) return (window as any).FaceMesh;
-    } catch (e: unknown) { lastErr = e; }
+    } catch (e: any) { lastErr = e; }
   }
   throw new Error(lastErr?.message ?? "MediaPipe unavailable. Check connection or CSP settings.");
 }

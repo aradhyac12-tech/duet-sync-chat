@@ -134,7 +134,7 @@ const Settings = () => {
   // Between query 3 and 4, a concurrent accept could corrupt both users' partner_id.
   // We now wrap the fallback in a single RPC that executes atomically server-side.
   // If that RPC also doesn't exist, we at least add optimistic conflict detection.
-  const acceptRequest = async (req: { id: string; requester_id: string; requester_name?: string }) => {
+  const acceptRequest = async (req: { id: string; requester_id: string; sender_id?: string; requester_name?: string }) => {
     if (!user) return;
     hapticMedium();
     const { error } = await supabase.rpc("accept_partner_request" as any, {
@@ -152,9 +152,8 @@ const Settings = () => {
           .select("status")
           .eq("id", req.id)
           .single();
-        if (!currentReq || currentReq.status !== "pending") {
+        if (!currentReq || (currentReq as any).status !== "pending") {
           toast({ title: "Request already handled", variant: "destructive" });
-          await loadRequests();
           return;
         }
         // Mark accepted first (unique constraint prevents double-accept)
@@ -168,13 +167,14 @@ const Settings = () => {
           return;
         }
         await supabase.rpc("unlink_partner", { p_user_id: user.id });
-        // Update both profiles — order matters: self first, then partner
-        await supabase.from("profiles").update({ partner_id: req.sender_id }).eq("user_id", user.id);
-        await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", req.sender_id);
+        const senderId = req.sender_id || req.requester_id;
+        await supabase.from("profiles").update({ partner_id: senderId }).eq("user_id", user.id);
+        await supabase.from("profiles").update({ partner_id: user.id }).eq("user_id", senderId);
       }
     }
-    setCurrentPartner(req.sender_id);
-    const { data:pp } = await supabase.from("profiles").select("display_name,avatar_url").eq("user_id",req.sender_id).single();
+    const senderId = req.sender_id || req.requester_id;
+    setCurrentPartner(senderId);
+    const { data:pp } = await supabase.from("profiles").select("display_name,avatar_url").eq("user_id",senderId).single();
     if (pp) { setPartnerName(pp.display_name||"Partner"); setPartnerInitials((pp.display_name||"P").slice(0,2).toUpperCase()); setPartnerAvatar(pp.avatar_url||null); }
     toast({ title:"Connected! 🎉", description:`Linked with ${pp?.display_name||"your partner"}` });
   };
@@ -577,8 +577,8 @@ const Settings = () => {
                     const txtFile = Object.keys(zip.files).find(f => f.endsWith(".txt"));
                     if (txtFile) text = await zip.files[txtFile].async("text");
                     else throw new Error("No .txt file found inside ZIP");
-                  } catch (zipErr: unknown) {
-                    toast({ title: "ZIP import failed", description: zipErr.message, variant: "destructive" });
+                  } catch (zipErr: any) {
+                    toast({ title: "ZIP import failed", description: zipErr?.message || String(zipErr), variant: "destructive" });
                     setImportingWhatsApp(false); e.target.value = ""; return;
                   }
                 }
