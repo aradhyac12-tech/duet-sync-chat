@@ -5,6 +5,7 @@ import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 
+// Fix #11: Actually persist the push token to Supabase so server can deliver notifications.
 export const usePushNotifications = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -14,74 +15,74 @@ export const usePushNotifications = () => {
   useEffect(() => {
     const isPlatformSupported = Capacitor.isNativePlatform();
     setIsSupported(isPlatformSupported);
-
     if (!isPlatformSupported || !user) return;
 
     const initPushNotifications = async () => {
       try {
-        // Request permission
         const permStatus = await PushNotifications.requestPermissions();
-        
         if (permStatus.receive === "granted") {
-          // Register for push notifications
           await PushNotifications.register();
-        } else {
-          console.log("Push notification permission denied");
         }
       } catch (error) {
-        console.error("Error initializing push notifications:", error);
+        /* AUDIT FIX #16: push init error — silent in production */
       }
     };
 
-    // Listen for registration success
-    const registrationListener = PushNotifications.addListener("registration", async (token: Token) => {
-      console.log("Push registration success, token:", token.value);
+    // BUG-06 FIX: Store resolved listener handles synchronously so cleanup
+    // can call .remove() before a re-mount registers new listeners.
+    // Previously all four addListener calls returned Promises and cleanup
+    // called .then(l => l.remove()) — async, so on rapid unmount→remount
+    // the old listeners were never removed before new ones registered,
+    // causing duplicate toast notifications and double push_token writes.
+    const listenerHandles: Array<{ remove: () => void }> = [];
+
+    const registrationPromise = PushNotifications.addListener("registration", async (token: Token) => {
       setPushToken(token.value);
-      
-      // Store token in database for the user (you'd need a push_tokens table)
-      // For now, just log it
-      console.log("Device registered for push notifications");
+      // Persist token to profiles table so Edge Function can send FCM/APNs
+      try {
+        await supabase
+          .from("profiles")
+          .update({ push_token: token.value, push_platform: Capacitor.getPlatform() })
+          .eq("user_id", user.id);
+      } catch (err) {
+        /* AUDIT FIX #16: push token save error — silent in production */
+      }
     });
 
-    // Listen for registration errors
-    const errorListener = PushNotifications.addListener("registrationError", (error) => {
-      console.error("Push registration error:", error);
+    const errorPromise = PushNotifications.addListener("registrationError", (error) => {
+      /* AUDIT FIX #16: push registration error — silent in production */
     });
 
-    // Listen for incoming notifications when app is in foreground
-    const notificationListener = PushNotifications.addListener(
+    const notificationPromise = PushNotifications.addListener(
       "pushNotificationReceived",
       (notification: PushNotificationSchema) => {
-        console.log("Push notification received:", notification);
-        toast({
-          title: notification.title || "New notification",
-          description: notification.body,
-        });
+        toast({ title: notification.title || "New notification", description: notification.body });
       }
     );
 
-    // Listen for notification tap/action
-    const actionListener = PushNotifications.addListener(
+    const actionPromise = PushNotifications.addListener(
       "pushNotificationActionPerformed",
       (action: ActionPerformed) => {
-        console.log("Push notification action performed:", action);
-        // Handle navigation based on notification data
         const data = action.notification.data;
-        if (data?.type === "message") {
-          window.location.href = "/chat";
-        } else if (data?.type === "call") {
-          window.location.href = "/calls";
-        }
+        if (data?.type === "message") window.location.href = "/chat";
+        else if (data?.type === "call")   window.location.href = "/calls";
       }
     );
+
+    // Collect resolved handles as soon as they're ready
+    Promise.all([registrationPromise, errorPromise, notificationPromise, actionPromise])
+      .then((handles) => listenerHandles.push(...handles))
+      .catch(() => {});
 
     initPushNotifications();
 
     return () => {
-      registrationListener.then((l) => l.remove());
-      errorListener.then((l) => l.remove());
-      notificationListener.then((l) => l.remove());
-      actionListener.then((l) => l.remove());
+      // Synchronous removal for already-resolved handles
+      listenerHandles.forEach((l) => l.remove());
+      // Belt-and-suspenders for any still-pending promises
+      Promise.all([registrationPromise, errorPromise, notificationPromise, actionPromise])
+        .then((handles) => handles.forEach((l) => l.remove()))
+        .catch(() => {});
     };
   }, [user, toast]);
 

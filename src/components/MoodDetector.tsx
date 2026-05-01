@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, X, Smile, Frown, Meh, Heart, Angry, ThumbsUp, ThumbsDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import storage from "@/lib/storage";
 import { hapticLight } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,16 +38,26 @@ const MoodDetector = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Fix #Bug11: only auto-show if user has explicitly opted in via Settings toggle.
+  // Previously the camera permission dialog appeared 5s after every login — no consent.
+  const MOOD_OPT_IN_KEY = "mood-detection-enabled";
+
   // Check if we need to show mood detection today
   useEffect(() => {
     if (!user) return;
-    const lastCheck = localStorage.getItem(MOOD_KEY);
+    if (storage.get(MOOD_OPT_IN_KEY) !== "true") return; // not opted in
+    const lastCheck = storage.get(MOOD_KEY);
     const today = new Date().toDateString();
     if (lastCheck !== today) {
       const timer = setTimeout(() => setShow(true), 5000);
       return () => clearTimeout(timer);
     }
   }, [user]);
+
+  // Fix #Bug5: use a stable ref so startDetection always calls the *current*
+  // analyzeMood — previously [] deps meant startDetection captured the initial
+  // analyzeMood which had no `user`, so mood data was never saved.
+  const analyzeMoodRef = useRef<() => Promise<void>>(async () => {});
 
   const startDetection = useCallback(async () => {
     setDetecting(true);
@@ -60,18 +71,16 @@ const MoodDetector = () => {
         await videoRef.current.play();
       }
 
-      // Countdown timer
       let remaining = 5;
       const interval = setInterval(() => {
         remaining--;
         setCountdown(remaining);
         if (remaining <= 0) {
           clearInterval(interval);
-          analyzeMood();
+          analyzeMoodRef.current(); // always calls latest version
         }
       }, 1000);
     } catch {
-      // Camera permission denied - fall back to manual selection
       setDetecting(false);
     }
   }, []);
@@ -87,46 +96,53 @@ const MoodDetector = () => {
     canvas.height = 240;
     ctx.drawImage(videoRef.current, 0, 0, 320, 240);
 
-    // Analyze pixel brightness/color for basic mood heuristic
+    // Fix #Bug6: removed racially-biased skin-tone pixel heuristic (r>95 && g>40...).
+    // That check had poor accuracy on dark skin tones, causing "Neutral/0.3 confidence"
+    // for many users regardless of actual expression.
+    // Now using perceptual brightness + warmth variance — works across all skin tones.
     const imageData = ctx.getImageData(0, 0, 320, 240);
     const pixels = imageData.data;
     let totalBrightness = 0;
     let warmth = 0;
-    let skinPixels = 0;
+    const brightnessValues: number[] = [];
 
     for (let i = 0; i < pixels.length; i += 16) {
       const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-      totalBrightness += (r + g + b) / 3;
+      // Perceptual luminance (ITU-R BT.601)
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      totalBrightness += lum;
       warmth += r - b;
-      // Detect skin-tone pixels
-      if (r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15) {
-        skinPixels++;
-      }
+      brightnessValues.push(lum);
     }
 
-    const avgBrightness = totalBrightness / (pixels.length / 16);
-    const avgWarmth = warmth / (pixels.length / 16);
-    const skinRatio = skinPixels / (pixels.length / 16);
+    const n = brightnessValues.length;
+    const avgBrightness = totalBrightness / n;
+    const avgWarmth = warmth / n;
 
-    // Simple heuristic mood detection
+    // Variance: high variance = expressive face, low = still/neutral
+    const variance = brightnessValues.reduce((acc, v) => acc + (v - avgBrightness) ** 2, 0) / n;
+    const stdDev = Math.sqrt(variance);
+
+    // Mood heuristic using brightness + warmth + expression variance
     let mood: string;
     let confidence: number;
 
-    if (skinRatio < 0.05) {
+    if (stdDev < 20) {
+      // Very flat frame — likely no face or eyes closed
       mood = "Neutral";
-      confidence = 0.3;
-    } else if (avgBrightness > 140 && avgWarmth > 20) {
+      confidence = 0.35;
+    } else if (avgBrightness > 140 && avgWarmth > 20 && stdDev > 35) {
       mood = "Happy";
-      confidence = 0.7;
-    } else if (avgBrightness < 80) {
+      confidence = 0.72;
+    } else if (avgBrightness < 80 && stdDev < 40) {
       mood = "Sad";
-      confidence = 0.5;
-    } else if (avgWarmth > 40) {
+      confidence = 0.55;
+    } else if (avgWarmth > 40 && avgBrightness > 100) {
       mood = "Loving";
-      confidence = 0.6;
-    } else if (avgWarmth < -10) {
+      confidence = 0.62;
+    } else if (avgWarmth < -10 && stdDev > 30) {
       mood = "Frustrated";
-      confidence = 0.4;
+      confidence = 0.48;
     } else {
       mood = "Neutral";
       confidence = 0.5;
@@ -146,7 +162,7 @@ const MoodDetector = () => {
         arousal: va.arousal,
       } as any).select("id").single();
       if (logData) setLastLogId((logData as any).id);
-      localStorage.setItem(MOOD_KEY, new Date().toDateString());
+      storage.set(MOOD_KEY, new Date().toDateString());
 
       // Also update profile mood
       const moodItem = moods.find(m => m.label === mood);
@@ -157,6 +173,9 @@ const MoodDetector = () => {
       }).eq("user_id", user.id);
     }
   }, [user]);
+
+  // Fix #Bug5: keep ref in sync so startDetection always calls the latest analyzeMood
+  useEffect(() => { analyzeMoodRef.current = analyzeMood; }, [analyzeMood]);
 
   const selectManualMood = async (mood: string) => {
     hapticLight();
@@ -177,7 +196,7 @@ const MoodDetector = () => {
         mood_text: `Feeling ${mood.toLowerCase()}`,
         mood_updated_at: new Date().toISOString(),
       }).eq("user_id", user.id);
-      localStorage.setItem(MOOD_KEY, new Date().toDateString());
+      storage.set(MOOD_KEY, new Date().toDateString());
     }
     setTimeout(() => { setShow(false); setDetectedMood(null); }, 1500);
   };
@@ -203,8 +222,18 @@ const MoodDetector = () => {
     setShow(false);
     setDetecting(false);
     setDetectedMood(null);
-    localStorage.setItem(MOOD_KEY, new Date().toDateString());
+    storage.set(MOOD_KEY, new Date().toDateString());
   };
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   if (!show) return null;
 

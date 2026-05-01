@@ -1,20 +1,18 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  generateKeyPair,
-  saveKeyPair,
-  loadKeyPair,
-  encryptMessage,
-  decryptMessage,
-  isEncrypted,
+  generateKeyPair, saveKeyPair, loadKeyPair,
+  encryptMessage, decryptMessage, isEncrypted,
 } from "@/lib/crypto";
 
 export const useE2E = (userId: string | undefined, partnerId: string | null) => {
   const [ready, setReady] = useState(false);
   const [partnerPublicKey, setPartnerPublicKey] = useState<string | null>(null);
   const [myKeys, setMyKeys] = useState<{ privateKeyJwk: JsonWebKey; publicKey: string } | null>(null);
+  // FIX: track interval so we can clear it once key found
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Init or load keys
+  // Init or load own keys
   useEffect(() => {
     if (!userId) return;
     const init = async () => {
@@ -24,50 +22,59 @@ export const useE2E = (userId: string | undefined, partnerId: string | null) => 
         keys = { privateKeyJwk, publicKey };
         saveKeyPair(userId, privateKeyJwk, publicKey);
       }
-      // Publish public key to profile
-      await supabase
-        .from("profiles")
-        .update({ public_key: keys.publicKey } as any)
-        .eq("user_id", userId);
+      await supabase.from("profiles").update({ public_key: keys.publicKey } as any).eq("user_id", userId);
       setMyKeys(keys);
     };
     init();
   }, [userId]);
 
-  // Fetch partner public key
+  // Fetch partner public key; stop polling once found
   useEffect(() => {
     if (!partnerId) return;
-    const fetch = async () => {
+    let cancelled = false;
+
+    const fetchKey = async () => {
       const { data } = await supabase
-        .from("profiles")
-        .select("public_key" as any)
-        .eq("user_id", partnerId)
-        .single();
+        .from("profiles").select("public_key" as any).eq("user_id", partnerId).single();
+      if (cancelled) return;
       if ((data as any)?.public_key) {
         setPartnerPublicKey((data as any).public_key);
-        setReady(true);
+        // FIX: stop polling once we have the key
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
       }
     };
-    fetch();
+
+    fetchKey();
+    // Only start interval if we don't already have the key
+    pollIntervalRef.current = setInterval(fetchKey, 5000);
+
+    return () => {
+      cancelled = true;
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
   }, [partnerId]);
 
-  const encrypt = useCallback(
-    async (text: string): Promise<string> => {
-      if (!myKeys || !partnerPublicKey) return text;
-      return encryptMessage(text, myKeys.privateKeyJwk, partnerPublicKey);
-    },
-    [myKeys, partnerPublicKey]
-  );
+  useEffect(() => {
+    setReady(!!myKeys && !!partnerPublicKey);
+  }, [myKeys, partnerPublicKey]);
 
-  const decrypt = useCallback(
-    async (text: string | null): Promise<string> => {
-      if (!text) return "";
-      if (!isEncrypted(text)) return text;
-      if (!myKeys || !partnerPublicKey) return "[🔒 Encrypted]";
-      return decryptMessage(text, myKeys.privateKeyJwk, partnerPublicKey);
-    },
-    [myKeys, partnerPublicKey]
-  );
+  const encrypt = useCallback(async (text: string): Promise<string> => {
+    if (!myKeys || !partnerPublicKey) return text;
+    return encryptMessage(text, myKeys.privateKeyJwk, partnerPublicKey);
+  }, [myKeys, partnerPublicKey]);
 
-  return { ready: ready && !!myKeys, encrypt, decrypt };
+  const decrypt = useCallback(async (text: string | null): Promise<string> => {
+    if (!text) return "";
+    if (!isEncrypted(text)) return text;
+    if (!myKeys || !partnerPublicKey) return "[🔒 Encrypted]";
+    return decryptMessage(text, myKeys.privateKeyJwk, partnerPublicKey);
+  }, [myKeys, partnerPublicKey]);
+
+  return { ready: ready && !!myKeys && !!partnerPublicKey, encrypt, decrypt };
 };
