@@ -183,7 +183,7 @@ const Us = () => {
     await supabase.from("profiles").update({
       mood_emoji: moodEmoji, mood_text: moodText, mood_updated_at: new Date().toISOString()
     }).eq("user_id", user.id);
-    setProfile((p) => (p ? { ...p, mood_emoji: moodEmoji, mood_text: moodText }));
+    setProfile((p) => (p ? { ...p, mood_emoji: moodEmoji, mood_text: moodText } : p));
     setShowMoodDialog(false);
     hapticLight();
     toast({ title: "Mood updated ✨" });
