@@ -1,6 +1,6 @@
 // FIX AUDIT #1: Comprehensive test setup — mocks all browser APIs used by DuoSpace.
 import "@testing-library/jest-dom";
-import { vi, afterEach } from "vitest";
+import { vi, afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 // ── Cleanup after each test to prevent state leaks between tests ──────────────
