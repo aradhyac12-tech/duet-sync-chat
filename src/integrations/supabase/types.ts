@@ -511,6 +511,42 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_uploads: {
+        Row: {
+          bucket: string
+          content_type: string | null
+          created_at: string
+          id: string
+          object_path: string
+          total_bytes: number
+          total_chunks: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bucket: string
+          content_type?: string | null
+          created_at?: string
+          id?: string
+          object_path: string
+          total_bytes: number
+          total_chunks: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bucket?: string
+          content_type?: string | null
+          created_at?: string
+          id?: string
+          object_path?: string
+          total_bytes?: number
+          total_chunks?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       playlist_songs: {
         Row: {
           added_by: string
