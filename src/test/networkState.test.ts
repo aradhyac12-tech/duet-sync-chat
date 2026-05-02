@@ -35,8 +35,10 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(new Error("permanent"));
     vi.useFakeTimers();
     const promise = withRetry(fn, { maxAttempts: 3, baseDelayMs: 10 });
+    // Attach catch synchronously so the rejection is never "unhandled"
+    const assertion = expect(promise).rejects.toThrow("permanent");
     await vi.runAllTimersAsync();
-    await expect(promise).rejects.toThrow("permanent");
+    await assertion;
     expect(fn).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });

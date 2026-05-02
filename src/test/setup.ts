@@ -1,6 +1,6 @@
 // FIX AUDIT #1: Comprehensive test setup — mocks all browser APIs used by DuoSpace.
 import "@testing-library/jest-dom";
-import { vi, afterEach } from "vitest";
+import { vi, afterEach, beforeEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 // ── Cleanup after each test to prevent state leaks between tests ──────────────
@@ -58,8 +58,8 @@ Object.defineProperty(navigator, "onLine", {
 
 // ── localStorage (jsdom provides this, but clear between tests) ───────────────
 beforeEach(() => {
-  localStorage.clear();
-  sessionStorage.clear();
+  try { localStorage.clear(); } catch { /* noop */ }
+  try { sessionStorage.clear(); } catch { /* noop */ }
 });
 
 // ── Supabase client mock — prevents real network calls in unit tests ──────────
