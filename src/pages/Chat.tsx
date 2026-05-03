@@ -1146,27 +1146,40 @@ const Chat = () => {
           </div>
           {isScreenSharing && <div className="bg-primary/60 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1"><Monitor className="h-3 w-3 text-background" /><span className="text-[10px] text-background">Sharing</span></div>}
           <button onClick={() => setShowLipReading(v=>!v)}
+            aria-label={showLipReading ? "Disable lip reading" : "Enable lip reading"}
+            aria-pressed={showLipReading}
             className={`ml-auto rounded-full px-3 py-1.5 flex items-center gap-1.5 backdrop-blur-md transition-colors ${showLipReading?"bg-green-500/80":"bg-background/15"}`}>
-            <Captions className="h-3.5 w-3.5 text-background" />
+            <Captions className="h-3.5 w-3.5 text-background" aria-hidden="true" />
             <span className="text-[10px] text-background font-medium">{showLipReading?"Reading":"Lip Read"}</span>
           </button>
         </div>
         <AnimatePresence>
           {showLipReading && callState==="joined" && <LipReadingOverlay videoRef={remoteVideoRef} onClose={() => setShowLipReading(false)} />}
         </AnimatePresence>
-        <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
+        <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom" role="toolbar" aria-label="Call controls">
           <div className="flex items-center justify-center gap-4">
-            <button onClick={toggleAudio} className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isAudioOn?"bg-background/15 backdrop-blur-md":"bg-destructive"}`}>
-              {isAudioOn?<Mic className="h-5 w-5 text-background" />:<MicOff className="h-5 w-5 text-background" />}
+            <button onClick={toggleAudio}
+              aria-label={isAudioOn ? "Mute microphone" : "Unmute microphone"}
+              aria-pressed={!isAudioOn}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isAudioOn?"bg-background/15 backdrop-blur-md":"bg-destructive"}`}>
+              {isAudioOn?<Mic className="h-5 w-5 text-background" aria-hidden="true" />:<MicOff className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
-            <button onClick={toggleVideo} className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isVideoOn?"bg-background/15 backdrop-blur-md":"bg-destructive"}`}>
-              {isVideoOn?<Video className="h-5 w-5 text-background" />:<VideoOff className="h-5 w-5 text-background" />}
+            <button onClick={toggleVideo}
+              aria-label={isVideoOn ? "Turn off camera" : "Turn on camera"}
+              aria-pressed={!isVideoOn}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isVideoOn?"bg-background/15 backdrop-blur-md":"bg-destructive"}`}>
+              {isVideoOn?<Video className="h-5 w-5 text-background" aria-hidden="true" />:<VideoOff className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
-            <button onClick={toggleScreenShare} className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isScreenSharing?"bg-primary":"bg-background/15 backdrop-blur-md"}`}>
-              {isScreenSharing?<MonitorOff className="h-5 w-5 text-background" />:<Monitor className="h-5 w-5 text-background" />}
+            <button onClick={toggleScreenShare}
+              aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
+              aria-pressed={isScreenSharing}
+              className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isScreenSharing?"bg-primary":"bg-background/15 backdrop-blur-md"}`}>
+              {isScreenSharing?<MonitorOff className="h-5 w-5 text-background" aria-hidden="true" />:<Monitor className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
-            <button onClick={endCall} className="h-14 w-14 rounded-full bg-destructive flex items-center justify-center shadow-lg">
-              <PhoneOff className="h-6 w-6 text-background" />
+            <button onClick={endCall}
+              aria-label="End call"
+              className="h-14 w-14 rounded-full bg-destructive flex items-center justify-center shadow-lg">
+              <PhoneOff className="h-6 w-6 text-background" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -1214,22 +1227,25 @@ const Chat = () => {
             {/* Nudge button */}
             {partnerId && (
               <button onClick={sendNudge}
+                aria-label="Send nudge"
                 className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors">
-                <Heart className="h-[17px] w-[17px]" />
+                <Heart className="h-[17px] w-[17px]" aria-hidden="true" />
               </button>
             )}
             <button onClick={() => startCall("video")} disabled={isStartingCall||!partnerId}
+              aria-label="Start video call"
               className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30">
-              <Video className="h-[18px] w-[18px]" />
+              <Video className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
             <button onClick={() => startCall("voice")} disabled={isStartingCall||!partnerId}
+              aria-label="Start voice call"
               className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-30">
-              <Phone className="h-[17px] w-[17px]" />
+              <Phone className="h-[17px] w-[17px]" aria-hidden="true" />
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-                  <MoreVertical className="h-[18px] w-[18px]" />
+                <button aria-label="More chat options" className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                  <MoreVertical className="h-[18px] w-[18px]" aria-hidden="true" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 rounded-xl border-border/50">
@@ -1265,11 +1281,11 @@ const Chat = () => {
                 {searchResults.length>0 && (
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-muted-foreground whitespace-nowrap">{searchIndex+1}/{searchResults.length}</span>
-                    <button onClick={() => setSearchIndex(i=>Math.max(0,i-1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronUp className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => setSearchIndex(i=>Math.min(searchResults.length-1,i+1))} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => setSearchIndex(i=>Math.max(0,i-1))} aria-label="Previous match" className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronUp className="h-3.5 w-3.5" aria-hidden="true" /></button>
+                    <button onClick={() => setSearchIndex(i=>Math.min(searchResults.length-1,i+1))} aria-label="Next match" className="h-6 w-6 flex items-center justify-center text-muted-foreground"><ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /></button>
                   </div>
                 )}
-                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground"><X className="h-3.5 w-3.5" /></button>
+                <button onClick={() => { setSearchOpen(false); setSearchQuery(""); }} aria-label="Close search" className="h-6 w-6 flex items-center justify-center text-muted-foreground"><X className="h-3.5 w-3.5" aria-hidden="true" /></button>
               </div>
             </motion.div>
           )}
@@ -1406,8 +1422,8 @@ const Chat = () => {
             className="px-4 py-2 bg-blue-500/10 border-t border-blue-500/20 flex items-center gap-2">
             <Pencil className="h-3.5 w-3.5 text-blue-500 shrink-0" />
             <span className="text-[11px] text-blue-600 flex-1 truncate">Editing message</span>
-            <button onClick={() => { setEditingMsg(null); setEditText(""); setMessage(""); }}>
-              <X className="h-4 w-4 text-muted-foreground" />
+            <button onClick={() => { setEditingMsg(null); setEditText(""); setMessage(""); }} aria-label="Cancel edit">
+              <X className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             </button>
           </motion.div>
         )}
@@ -1420,17 +1436,20 @@ const Chat = () => {
             className="flex items-center gap-3 bg-destructive/5 rounded-full border border-destructive/10 px-4 py-2.5">
             <motion.div animate={{ opacity:[1,0.3,1] }} transition={{ repeat:Infinity,duration:1 }} className="h-2 w-2 rounded-full bg-destructive shrink-0" />
             <span className="text-sm font-medium text-destructive flex-1">{formatRecTime(recordingTime)}</span>
-            <button onClick={cancelRecording} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center"><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
-            <button onClick={stopRecording} className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center"><Send className="h-3.5 w-3.5 text-background" /></button>
+            <button onClick={cancelRecording} aria-label="Cancel voice recording" className="h-8 w-8 rounded-full bg-muted flex items-center justify-center"><Trash2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /></button>
+            <button onClick={stopRecording} aria-label="Send voice recording" className="h-8 w-8 rounded-full bg-foreground flex items-center justify-center"><Send className="h-3.5 w-3.5 text-background" aria-hidden="true" /></button>
           </motion.div>
         ) : (
           <div className="flex items-center gap-1.5">
             <div className="flex-1 flex items-center gap-1 bg-muted/30 rounded-full border border-border/30 px-2 py-1">
               <button onClick={() => setShowAttach(!showAttach)}
+                aria-label="Attachments"
+                aria-expanded={showAttach}
                 className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground transition-colors">
-                <Paperclip className="h-4 w-4" />
+                <Paperclip className="h-4 w-4" aria-hidden="true" />
               </button>
               <input ref={inputRef} type="text" value={message}
+                aria-label="Message"
                 onChange={e => { setMessage(e.target.value); broadcastTyping(); if(editingMsg) setEditText(e.target.value); }}
                 onKeyDown={e => e.key==="Enter" && handleSend()}
                 placeholder={editingMsg?"Edit message...":replyTo?"Reply...":"Message"}
@@ -1438,19 +1457,21 @@ const Chat = () => {
             </div>
             {message.trim() ? (
               <motion.button initial={{ scale:0 }} animate={{ scale:1 }} onClick={handleSend}
+                aria-label={editingMsg ? "Save edit" : "Send message"}
                 className="h-10 w-10 rounded-full bg-foreground flex items-center justify-center shrink-0">
-                {editingMsg ? <Check className="h-4 w-4 text-background" /> : <Send className="h-4 w-4 text-background" />}
+                {editingMsg ? <Check className="h-4 w-4 text-background" aria-hidden="true" /> : <Send className="h-4 w-4 text-background" aria-hidden="true" />}
               </motion.button>
             ) : (
               <button
                 onPointerDown={startRecording}
                 onPointerUp={stopRecording}
+                aria-label="Hold to record voice message"
                 // Fix #Bug4: pointer events unify touch+mouse — no double-fire on Android/iOS.
                 // onMouseDown/onTouchStart both fired on mobile causing startRecording() twice.
                 onPointerLeave={() => { if (isRecording) cancelRecording(); }}
                 style={{ touchAction: "none" }}
                 className="h-10 w-10 rounded-full bg-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform">
-                <Mic className="h-4 w-4 text-background" />
+                <Mic className="h-4 w-4 text-background" aria-hidden="true" />
               </button>
             )}
             <HubButton onClick={() => setShowGridMenu(!showGridMenu)} isOpen={showGridMenu} />
