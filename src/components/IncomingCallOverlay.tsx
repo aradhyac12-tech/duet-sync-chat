@@ -104,10 +104,25 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
     return () => clearTimeout(timeout);
   }, [incomingCall, handleDecline]);
 
+  // A11y: keyboard support — Escape declines, Enter accepts.
+  useEffect(() => {
+    if (!incomingCall) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); handleDecline(); }
+      else if (e.key === "Enter") { e.preventDefault(); handleAccept(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [incomingCall, handleAccept, handleDecline]);
+
   return (
     <AnimatePresence>
       {incomingCall && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="incoming-call-title"
+          aria-describedby="incoming-call-desc"
           className="fixed inset-0 z-[100] flex flex-col items-center justify-between bg-foreground/95 backdrop-blur-xl safe-top safe-bottom">
           <div className="flex-1 flex flex-col items-center justify-center gap-6">
             <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
@@ -115,18 +130,18 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
               {incomingCall.callerAvatar ? (
                 <img src={incomingCall.callerAvatar} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-4xl font-semibold text-background/60">
+                <span className="text-4xl font-semibold text-background/60" aria-hidden="true">
                   {incomingCall.callerName.charAt(0).toUpperCase()}
                 </span>
               )}
             </motion.div>
             <div className="text-center">
-              <h2 className="text-2xl font-semibold text-background tracking-tight">{incomingCall.callerName}</h2>
-              <p className="text-sm text-background/50 mt-1">
+              <h2 id="incoming-call-title" className="text-2xl font-semibold text-background tracking-tight">{incomingCall.callerName}</h2>
+              <p id="incoming-call-desc" className="text-sm text-background/50 mt-1">
                 Incoming {incomingCall.call_type === "video" ? "video" : "voice"} call...
               </p>
             </div>
-            <div className="relative">
+            <div className="relative" aria-hidden="true">
               <motion.div animate={{ scale: [1, 1.5], opacity: [0.3, 0] }}
                 transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
                 className="absolute inset-0 rounded-full border-2 border-background/20"
@@ -137,22 +152,25 @@ const IncomingCallOverlay = ({ onAccept, onDecline }: IncomingCallOverlayProps) 
           <div className="pb-16 flex items-center gap-16">
             <div className="flex flex-col items-center gap-2">
               <motion.button whileTap={{ scale: 0.9 }} onClick={handleDecline}
-                className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
-                <PhoneOff className="h-7 w-7 text-background" />
+                aria-label={`Decline ${incomingCall.call_type} call from ${incomingCall.callerName}`}
+                autoFocus
+                className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-background">
+                <PhoneOff className="h-7 w-7 text-background" aria-hidden="true" />
               </motion.button>
-              <span className="text-xs text-background/50">Decline</span>
+              <span className="text-xs text-background/50" aria-hidden="true">Decline</span>
             </div>
             <div className="flex flex-col items-center gap-2">
               <motion.button whileTap={{ scale: 0.9 }} animate={{ scale: [1, 1.1, 1] }}
                 transition={{ repeat: Infinity, duration: 1.2 }} onClick={handleAccept}
-                className="h-16 w-16 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+                aria-label={`Accept ${incomingCall.call_type} call from ${incomingCall.callerName}`}
+                className="h-16 w-16 rounded-full bg-green-500 flex items-center justify-center shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-background">
                 {incomingCall.call_type === "video" ? (
-                  <Video className="h-7 w-7 text-background" />
+                  <Video className="h-7 w-7 text-background" aria-hidden="true" />
                 ) : (
-                  <Phone className="h-7 w-7 text-background" />
+                  <Phone className="h-7 w-7 text-background" aria-hidden="true" />
                 )}
               </motion.button>
-              <span className="text-xs text-background/50">Accept</span>
+              <span className="text-xs text-background/50" aria-hidden="true">Accept</span>
             </div>
           </div>
         </motion.div>
