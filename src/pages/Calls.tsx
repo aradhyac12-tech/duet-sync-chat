@@ -273,11 +273,13 @@ const Calls = () => {
           {/* Lip reading toggle */}
           <button
             onClick={() => setShowLipReading(v => !v)}
+            aria-label={showLipReading ? "Disable lip reading" : "Enable lip reading"}
+            aria-pressed={showLipReading}
             className={`ml-auto rounded-full px-3 py-1.5 flex items-center gap-1.5 backdrop-blur-md ${
               showLipReading ? "bg-green-500/80" : "bg-background/20"
             }`}
           >
-            <Captions className="h-3.5 w-3.5 text-background" />
+            <Captions className="h-3.5 w-3.5 text-background" aria-hidden="true" />
             <span className="text-[10px] text-background font-medium">Lip Read</span>
           </button>
         </div>
@@ -292,33 +294,44 @@ const Calls = () => {
           )}
         </AnimatePresence>
 
-        <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom">
+        <div className="absolute bottom-10 left-0 right-0 z-10 safe-bottom" role="toolbar" aria-label="Call controls">
           <div className="flex items-center justify-center gap-3">
             <button onClick={toggleAudio}
+              aria-label={isAudioOn ? "Mute microphone" : "Unmute microphone"}
+              aria-pressed={!isAudioOn}
               className={`rounded-full flex items-center justify-center transition-colors ${isAudioOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
               style={{ width: 52, height: 52 }}>
-              {isAudioOn ? <Mic className="h-5 w-5 text-background" /> : <MicOff className="h-5 w-5 text-background" />}
+              {isAudioOn ? <Mic className="h-5 w-5 text-background" aria-hidden="true" /> : <MicOff className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
             <button onClick={toggleVideo}
+              aria-label={isVideoOn ? "Turn off camera" : "Turn on camera"}
+              aria-pressed={!isVideoOn}
               className={`rounded-full flex items-center justify-center transition-colors ${isVideoOn ? "bg-background/20 backdrop-blur-md" : "bg-destructive"}`}
               style={{ width: 52, height: 52 }}>
-              {isVideoOn ? <VideoIcon className="h-5 w-5 text-background" /> : <VideoOff className="h-5 w-5 text-background" />}
+              {isVideoOn ? <VideoIcon className="h-5 w-5 text-background" aria-hidden="true" /> : <VideoOff className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
             <button onClick={toggleScreenShare}
+              aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
+              aria-pressed={isScreenSharing}
               className={`rounded-full flex items-center justify-center transition-colors ${isScreenSharing ? "bg-primary" : "bg-background/20 backdrop-blur-md"}`}
               style={{ width: 52, height: 52 }}>
-              {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" /> : <Monitor className="h-5 w-5 text-background" />}
+              {isScreenSharing ? <MonitorOff className="h-5 w-5 text-background" aria-hidden="true" /> : <Monitor className="h-5 w-5 text-background" aria-hidden="true" />}
             </button>
             {/* CALL-03: Camera picker button — shows only when multiple cameras available */}
             {cameras.length > 1 && (
               <button onClick={() => setShowCamPicker(v => !v)}
+                aria-label="Switch camera"
+                aria-haspopup="menu"
+                aria-expanded={showCamPicker}
                 className="rounded-full flex items-center justify-center bg-background/20 backdrop-blur-md"
                 style={{ width: 52, height: 52 }}>
-                <VideoIcon className="h-5 w-5 text-background opacity-60" />
+                <VideoIcon className="h-5 w-5 text-background opacity-60" aria-hidden="true" />
               </button>
             )}
-            <button onClick={endCall} className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
-              <PhoneOff className="h-7 w-7 text-background" />
+            <button onClick={endCall}
+              aria-label="End call"
+              className="h-16 w-16 rounded-full bg-destructive flex items-center justify-center shadow-lg">
+              <PhoneOff className="h-7 w-7 text-background" aria-hidden="true" />
             </button>
           </div>
 
@@ -373,16 +386,18 @@ const Calls = () => {
 
         <div className="flex gap-3">
           <button onClick={() => startCall("voice")} disabled={isStartingCall}
+            aria-label="Start voice call"
             className="flex-1 bg-card rounded-2xl border border-border p-5 flex flex-col items-center gap-3 shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50">
             <div className="h-14 w-14 rounded-full bg-accent flex items-center justify-center">
-              <Phone className="h-6 w-6 text-foreground" />
+              <Phone className="h-6 w-6 text-foreground" aria-hidden="true" />
             </div>
             <span className="text-sm font-medium">{isStartingCall ? "Starting..." : "Voice Call"}</span>
           </button>
           <button onClick={() => startCall("video")} disabled={isStartingCall}
+            aria-label="Start video call"
             className="flex-1 bg-card rounded-2xl border border-border p-5 flex flex-col items-center gap-3 shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50">
             <div className="h-14 w-14 rounded-full bg-foreground flex items-center justify-center">
-              <Video className="h-6 w-6 text-background" />
+              <Video className="h-6 w-6 text-background" aria-hidden="true" />
             </div>
             <div>
               <span className="text-sm font-medium block">{isStartingCall ? "Starting..." : "Video Call"}</span>
@@ -428,8 +443,9 @@ const Calls = () => {
                       <span className="text-xs text-muted-foreground">{formatDurationShort(call.duration_seconds)}</span>
                     )}
                     <button onClick={() => deleteCallRecord(call.id)}
-                      className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted">
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      aria-label="Delete call record"
+                      className="h-7 w-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-muted">
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     </button>
                   </motion.div>
                 );
