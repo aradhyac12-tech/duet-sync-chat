@@ -16,15 +16,37 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import storage from "@/lib/storage";
 
-const Chat = lazy(() => import("@/pages/Chat"));
-const Gallery = lazy(() => import("@/pages/Gallery"));
-const Calls = lazy(() => import("@/pages/Calls"));
-const Playlist = lazy(() => import("@/pages/Playlist"));
-const Shayari = lazy(() => import("@/pages/Shayari"));
-const MapView = lazy(() => import("@/pages/MapView"));
-const Us = lazy(() => import("@/pages/Us"));
-const Settings = lazy(() => import("@/pages/Settings"));
+// Lazy chunks with preload handles so we can warm them on app mount / nav hover.
+const ChatImport = () => import("@/pages/Chat");
+const GalleryImport = () => import("@/pages/Gallery");
+const CallsImport = () => import("@/pages/Calls");
+const PlaylistImport = () => import("@/pages/Playlist");
+const ShayariImport = () => import("@/pages/Shayari");
+const MapImport = () => import("@/pages/MapView");
+const UsImport = () => import("@/pages/Us");
+const SettingsImport = () => import("@/pages/Settings");
+
+const Chat = lazy(ChatImport);
+const Gallery = lazy(GalleryImport);
+const Calls = lazy(CallsImport);
+const Playlist = lazy(PlaylistImport);
+const Shayari = lazy(ShayariImport);
+const MapView = lazy(MapImport);
+const Us = lazy(UsImport);
+const Settings = lazy(SettingsImport);
 const NotFound = lazy(() => import("@/pages/NotFound"));
+
+// Expose preloaders so BottomNav can warm a chunk on touchstart/hover.
+export const routePreload: Record<string, () => Promise<unknown>> = {
+  "/chat": ChatImport,
+  "/gallery": GalleryImport,
+  "/calls": CallsImport,
+  "/playlist": PlaylistImport,
+  "/shayari": ShayariImport,
+  "/map": MapImport,
+  "/us": UsImport,
+  "/settings": SettingsImport,
+};
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
