@@ -1316,6 +1316,10 @@ const Chat = () => {
 
       {/* Messages */}
       <div ref={messagesContainerRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Conversation messages"
         className="flex-1 overflow-y-auto px-3 py-3 min-h-0"
         style={chatWallpaper ? {
           backgroundImage: chatWallpaper.startsWith("url(") ? chatWallpaper : undefined,
