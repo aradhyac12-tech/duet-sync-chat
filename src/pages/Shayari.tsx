@@ -156,7 +156,7 @@ const Shayari = () => {
   const formatDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24" style={{ WebkitOverflowScrolling: "touch" as any }}>
       <PageHeader title="Shayari" subtitle="Words from the heart">
         <button onClick={() => { hapticLight(); setShowAddDialog(true); }}
           className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">

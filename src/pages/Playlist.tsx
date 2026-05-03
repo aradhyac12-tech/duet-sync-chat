@@ -466,7 +466,7 @@ const Playlist = () => {
   const spotifyData = currentSong?.platform === "spotify" ? getSpotifyId(currentSong.song_url) : null;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-36">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-36" style={{ WebkitOverflowScrolling: "touch" as any }}>
       <PageHeader title="Our Playlist" subtitle="Songs we love together">
         <div className="flex items-center gap-2">
           <button
