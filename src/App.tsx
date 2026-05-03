@@ -78,6 +78,20 @@ const ProtectedRoutes = () => {
     checkProfile();
   }, [user]);
 
+  // Preload all route chunks during idle time so first tab tap is instant.
+  useEffect(() => {
+    if (!user) return;
+    const idle = (cb: () => void) =>
+      (window as any).requestIdleCallback?.(cb, { timeout: 1500 }) ?? setTimeout(cb, 600);
+    const handle = idle(() => {
+      Object.values(routePreload).forEach((p) => { p().catch(() => {}); });
+    });
+    return () => {
+      (window as any).cancelIdleCallback?.(handle);
+      clearTimeout(handle as any);
+    };
+  }, [user]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
