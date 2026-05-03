@@ -486,7 +486,7 @@ const Gallery = () => {
   );
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24" style={{ WebkitOverflowScrolling: "touch" as any }}>
       <PageHeader title="Gallery" subtitle="Our moments">
         <div className="flex gap-2 items-center">
           {/* Media visibility toggle */}

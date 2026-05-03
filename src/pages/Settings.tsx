@@ -303,7 +303,13 @@ const Settings = () => {
   ];
 
   return (
-    <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="min-h-screen pb-24 bg-background">
+    <motion.div
+      initial={{ opacity:0 }}
+      animate={{ opacity:1 }}
+      transition={{ duration: 0.15 }}
+      className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 bg-background"
+      style={{ WebkitOverflowScrolling: "touch" as any }}
+    >
       <header className="safe-top px-5 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform">

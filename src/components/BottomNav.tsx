@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { routePreload } from "@/App";
 
 const tabs = [
   { path: "/chat", icon: MessageCircle, label: "Chat", badgeKey: "messages" },
@@ -134,6 +135,7 @@ const BottomNav = () => {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
+              onPointerDown={() => routePreload[tab.path]?.().catch(() => {})}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-2xl transition-colors",
                 isActive ? "text-foreground" : "text-muted-foreground"
@@ -161,6 +163,7 @@ const BottomNav = () => {
         })}
         <button
           onClick={() => navigate("/settings")}
+          onPointerDown={() => routePreload["/settings"]?.().catch(() => {})}
           className={cn(
             "relative flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-2xl transition-colors",
             location.pathname === "/settings" ? "text-foreground" : "text-muted-foreground"

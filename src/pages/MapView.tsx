@@ -269,7 +269,7 @@ const MapView = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col flex-1 min-h-0">
       <PageHeader title="Map" subtitle="Always close" />
 
       <div className="flex-1 mx-5 mb-4 rounded-2xl border border-border overflow-hidden relative">

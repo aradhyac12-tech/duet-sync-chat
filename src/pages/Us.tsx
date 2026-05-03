@@ -246,7 +246,7 @@ const Us = () => {
   const moodTimeStr = safeTimeAgo(partnerProfile?.mood_updated_at);
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-24">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24" style={{ WebkitOverflowScrolling: "touch" as any }}>
       <PageHeader title="Us" subtitle="Our little world">
         <button onClick={() => navigate("/settings")} className="h-9 w-9 rounded-xl bg-accent flex items-center justify-center">
           <Settings className="h-4 w-4 text-foreground" />
