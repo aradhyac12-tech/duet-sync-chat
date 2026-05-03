@@ -348,7 +348,7 @@ const Calls = () => {
 
   // Call hub
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" as any }}>
       <PageHeader title="Calls" subtitle="Stay connected" />
 
       <div className="px-5 space-y-6 pb-24">
