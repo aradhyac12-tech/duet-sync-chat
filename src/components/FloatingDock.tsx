@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { routePreload } from "@/App";
-import { triggerHaptic } from "@/lib/haptics";
+import { hapticLight } from "@/lib/haptics";
+const triggerHaptic = (_kind?: string) => { hapticLight(); };
 
 type Tab = {
   path: string;
