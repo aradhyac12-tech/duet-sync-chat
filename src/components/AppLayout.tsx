@@ -1,6 +1,6 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { useCallback } from "react";
-import BottomNav from "@/components/BottomNav";
+import FloatingDock from "@/components/FloatingDock";
 import SurpriseOverlay from "@/components/SurpriseOverlay";
 import MoodDetector from "@/components/MoodDetector";
 import EmojiScreenEffect from "@/components/EmojiScreenEffect";
@@ -54,13 +54,16 @@ const AppLayout = () => {
     // FIX AUDIT #13: no-overscroll prevents iOS bounce exposing white bar behind notch
     <div className="h-[100dvh] bg-background overflow-x-hidden flex flex-col no-overscroll">
       <OfflineBanner isOnline={isOnline} />
-      <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <main
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 84px)" }}
+      >
         {/* FIX AUDIT #2: Error boundary per page so one crash doesn't kill the whole app */}
         <ErrorBoundary context="PageContent">
           <Outlet />
         </ErrorBoundary>
       </main>
-      <BottomNav />
+      <FloatingDock />
       <SurpriseOverlay />
       <MoodDetector />
       <EmojiScreenEffect />
