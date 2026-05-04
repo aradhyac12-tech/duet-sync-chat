@@ -1,6 +1,6 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { useCallback } from "react";
-import BottomNav from "@/components/BottomNav";
+import FloatingDock from "@/components/FloatingDock";
 import SurpriseOverlay from "@/components/SurpriseOverlay";
 import MoodDetector from "@/components/MoodDetector";
 import EmojiScreenEffect from "@/components/EmojiScreenEffect";
