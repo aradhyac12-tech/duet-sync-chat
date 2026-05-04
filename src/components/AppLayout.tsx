@@ -60,7 +60,7 @@ const AppLayout = () => {
           <Outlet />
         </ErrorBoundary>
       </main>
-      <BottomNav />
+      <FloatingDock />
       <SurpriseOverlay />
       <MoodDetector />
       <EmojiScreenEffect />
