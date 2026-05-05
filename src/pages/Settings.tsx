@@ -320,16 +320,26 @@ const Settings = () => {
       className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 bg-background"
       style={{ WebkitOverflowScrolling: "touch" as any }}
     >
-      <header className="safe-top px-5 pt-4 pb-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform">
+      <header className="safe-top px-5 pt-4 pb-3 sticky top-0 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform" aria-label="Back">
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+          <h1 className="text-lg font-semibold tracking-tight flex-1">Settings</h1>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search settings"
+            className="h-9 pl-8 rounded-full bg-muted/60 border-transparent text-sm"
+            aria-label="Search settings"
+          />
         </div>
       </header>
 
-      <div className="px-5 space-y-6">
+      <div className="px-5 space-y-6 pt-5">
 
         {/* Partner */}
         <section>
