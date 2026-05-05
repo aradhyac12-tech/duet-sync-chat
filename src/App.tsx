@@ -49,6 +49,7 @@ export const routePreload: Record<string, () => Promise<unknown>> = {
   "/map": MapImport,
   "/us": UsImport,
   "/settings": SettingsImport,
+  "/groic": GroicImport,
 };
 
 const PageFallback = () => (
