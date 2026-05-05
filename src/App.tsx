@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import { GroicProvider } from "@/contexts/GroicContext";
 import AppLayout from "@/components/AppLayout";
 import AppLockScreen from "@/components/AppLockScreen";
 import PeekGuard from "@/components/PeekGuard";
@@ -25,6 +26,7 @@ const ShayariImport = () => import("@/pages/Shayari");
 const MapImport = () => import("@/pages/MapView");
 const UsImport = () => import("@/pages/Us");
 const SettingsImport = () => import("@/pages/Settings");
+const GroicImport = () => import("@/pages/Groic");
 
 const Chat = lazy(ChatImport);
 const Gallery = lazy(GalleryImport);
@@ -34,6 +36,7 @@ const Shayari = lazy(ShayariImport);
 const MapView = lazy(MapImport);
 const Us = lazy(UsImport);
 const Settings = lazy(SettingsImport);
+const Groic = lazy(GroicImport);
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Expose preloaders so BottomNav can warm a chunk on touchstart/hover.
@@ -46,6 +49,7 @@ export const routePreload: Record<string, () => Promise<unknown>> = {
   "/map": MapImport,
   "/us": UsImport,
   "/settings": SettingsImport,
+  "/groic": GroicImport,
 };
 
 const PageFallback = () => (
@@ -165,6 +169,7 @@ const App = () => (
               <Route path="/map" element={<MapView />} />
               <Route path="/us" element={<Us />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/groic" element={<Groic />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
