@@ -839,6 +839,8 @@ const Settings = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ThemeStudio open={showThemeStudio} onOpenChange={setShowThemeStudio} />
     </motion.div>
   );
 };
