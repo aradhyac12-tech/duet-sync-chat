@@ -25,6 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { hashPin } from "@/lib/crypto";
 import BackupManager from "@/components/BackupManager";
+import ThemeStudio from "@/components/ThemeStudio";
 
 const presetWallpapers = [
   { id:"w1", style:"linear-gradient(135deg, hsl(28,15%,90%) 0%, hsl(28,20%,82%) 100%)" },
@@ -72,6 +73,15 @@ const Settings = () => {
   const [importingWhatsApp, setImportingWhatsApp] = useState(false);
   const [importProgress, setImportProgress]       = useState("");
   const whatsappFileRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery]             = useState("");
+  const [showThemeStudio, setShowThemeStudio]     = useState(false);
+
+  // Filter sections by search query (matches against section data-keywords).
+  const matches = (keywords: string) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return keywords.toLowerCase().includes(q);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -310,20 +320,30 @@ const Settings = () => {
       className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-24 bg-background"
       style={{ WebkitOverflowScrolling: "touch" as any }}
     >
-      <header className="safe-top px-5 pt-4 pb-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform">
+      <header className="safe-top px-5 pt-4 pb-3 sticky top-0 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={() => { hapticLight(); navigate(-1); }} className="h-8 w-8 rounded-full bg-accent/60 flex items-center justify-center active:scale-95 transition-transform" aria-label="Back">
             <ChevronLeft className="h-4 w-4 text-foreground" />
           </button>
-          <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+          <h1 className="text-lg font-semibold tracking-tight flex-1">Settings</h1>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search settings"
+            className="h-9 pl-8 rounded-full bg-muted/60 border-transparent text-sm"
+            aria-label="Search settings"
+          />
         </div>
       </header>
 
-      <div className="px-5 space-y-6">
+      <div className="px-5 space-y-6 pt-5">
 
         {/* Partner */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Partner</p>
+        <section hidden={!matches("partner invite link username code request connect unlink")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Partner</p>
 
           {/* Pending partner requests */}
           {pendingRequests.length > 0 && (
@@ -393,8 +413,8 @@ const Settings = () => {
         </section>
 
         {/* Username */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Your Username</p>
+        <section hidden={!matches("username profile handle")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Your Username</p>
           <div className="bg-card rounded-2xl border border-border/60 p-4 space-y-2">
             <div className="flex gap-2">
               <Input value={myUsername} onChange={e=>setMyUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g,""))}
@@ -406,8 +426,8 @@ const Settings = () => {
         </section>
 
         {/* Appearance */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Appearance</p>
+        <section hidden={!matches("appearance theme color wallpaper icon name dark light")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Appearance</p>
           <div className="space-y-2">
             {/* App name */}
             <div className="bg-card rounded-2xl border border-border/60 p-4 space-y-2">
@@ -473,6 +493,12 @@ const Settings = () => {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => { hapticLight(); setShowThemeStudio(true); }}
+                className="mt-3 w-full h-9 rounded-xl bg-gradient-to-r from-primary/15 to-accent/30 border border-border/60 text-xs font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+              >
+                <Palette className="h-3.5 w-3.5" /> Open Theme Studio
+              </button>
             </div>
             {/* Wallpaper */}
             <div className="bg-card rounded-2xl border border-border/60 p-4">
@@ -492,8 +518,8 @@ const Settings = () => {
         </section>
 
         {/* Security */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Security & Privacy</p>
+        <section hidden={!matches("security privacy lock pin biometric fingerprint face haptic notification mood")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Security & Privacy</p>
           <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
             {settingsItems.map(item => (
               <div key={item.key} className="flex items-center gap-3 px-4 py-3">
@@ -520,8 +546,8 @@ const Settings = () => {
         </section>
 
         {/* Anniversary */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Anniversary</p>
+        <section hidden={!matches("anniversary date love")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Anniversary</p>
           <div className="bg-card rounded-2xl border border-border/60 p-4 space-y-2">
             <p className="text-sm font-medium">Your special date 💕</p>
             <input type="date" value={appSettings.anniversaryDate||""}
@@ -534,8 +560,8 @@ const Settings = () => {
         </section>
 
         {/* Data */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Data & Backup</p>
+        <section hidden={!matches("data backup cloud sync recovery restore")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Data & Backup</p>
           <div className="bg-card rounded-2xl border border-border/60 divide-y divide-border/40">
             <div className="flex items-center gap-3 px-4 py-3">
               <Download className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -553,8 +579,8 @@ const Settings = () => {
         <BackupManager />
 
         {/* WhatsApp Import */}
-        <section>
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Import</p>
+        <section hidden={!matches("whatsapp import chat history")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Import</p>
           <div className="bg-card rounded-2xl border border-border/60">
             <button onClick={() => whatsappFileRef.current?.click()} disabled={importingWhatsApp}
               className="w-full flex items-center gap-3 px-4 py-3 text-left active:scale-[0.98] transition-transform disabled:opacity-50">
@@ -734,8 +760,8 @@ const Settings = () => {
         <CodeSurpriseEditor partnerId={currentPartner} />
 
         {/* Account */}
-        <section className="pb-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5">Account</p>
+        <section className="pb-4" hidden={!matches("account sign out logout email")}>
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2.5 sticky top-[112px] z-10 bg-background/85 backdrop-blur-sm py-1 -mx-1 px-1 rounded">Account</p>
           <p className="text-xs text-muted-foreground mb-2">{user?.email}</p>
           <button onClick={async () => { hapticMedium(); await supabase.auth.signOut(); }}
             className="w-full bg-card rounded-xl border border-border/60 p-3 text-sm text-destructive text-center active:scale-[0.98] transition-transform">
@@ -813,6 +839,8 @@ const Settings = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ThemeStudio open={showThemeStudio} onOpenChange={setShowThemeStudio} />
     </motion.div>
   );
 };

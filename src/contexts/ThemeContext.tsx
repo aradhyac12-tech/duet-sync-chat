@@ -323,11 +323,17 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   });
   const [isAppLocked, setIsAppLocked] = useState(false);
 
-  // Apply theme CSS variables
+  // Apply theme CSS variables. After applying preset, re-apply any active
+  // custom theme override on top so the user's last custom selection persists
+  // across reloads and preset switches.
   useEffect(() => {
     const root = document.documentElement;
     const styles = themeStyles[theme];
     Object.entries(styles).forEach(([key, value]) => root.style.setProperty(key, value));
+    // Lazy-import to avoid a circular dep at module load.
+    import("@/lib/customThemes").then(({ restoreActiveCustomTheme }) => {
+      restoreActiveCustomTheme();
+    });
   }, [theme]);
 
   const setTheme = (t: ThemeColor) => {
