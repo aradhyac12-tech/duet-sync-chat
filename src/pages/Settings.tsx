@@ -25,6 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { hashPin } from "@/lib/crypto";
 import BackupManager from "@/components/BackupManager";
+import ThemeStudio from "@/components/ThemeStudio";
 
 const presetWallpapers = [
   { id:"w1", style:"linear-gradient(135deg, hsl(28,15%,90%) 0%, hsl(28,20%,82%) 100%)" },
