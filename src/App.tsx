@@ -169,6 +169,7 @@ const App = () => (
               <Route path="/map" element={<MapView />} />
               <Route path="/us" element={<Us />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/groic" element={<Groic />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
