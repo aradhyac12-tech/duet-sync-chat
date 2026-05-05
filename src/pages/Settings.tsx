@@ -73,6 +73,15 @@ const Settings = () => {
   const [importingWhatsApp, setImportingWhatsApp] = useState(false);
   const [importProgress, setImportProgress]       = useState("");
   const whatsappFileRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery]             = useState("");
+  const [showThemeStudio, setShowThemeStudio]     = useState(false);
+
+  // Filter sections by search query (matches against section data-keywords).
+  const matches = (keywords: string) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return keywords.toLowerCase().includes(q);
+  };
 
   useEffect(() => {
     if (!user) return;
