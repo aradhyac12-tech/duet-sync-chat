@@ -493,6 +493,12 @@ const Settings = () => {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => { hapticLight(); setShowThemeStudio(true); }}
+                className="mt-3 w-full h-9 rounded-xl bg-gradient-to-r from-primary/15 to-accent/30 border border-border/60 text-xs font-medium flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+              >
+                <Palette className="h-3.5 w-3.5" /> Open Theme Studio
+              </button>
             </div>
             {/* Wallpaper */}
             <div className="bg-card rounded-2xl border border-border/60 p-4">
