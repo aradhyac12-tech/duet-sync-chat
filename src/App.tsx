@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
-import { GroicProvider } from "@/contexts/GroicContext";
+
 import AppLayout from "@/components/AppLayout";
 import AppLockScreen from "@/components/AppLockScreen";
 import PeekGuard from "@/components/PeekGuard";
