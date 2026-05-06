@@ -851,6 +851,7 @@ const Settings = () => {
       </Dialog>
 
       <ThemeStudio open={showThemeStudio} onOpenChange={setShowThemeStudio} />
+      <PeekConfigDialog open={showPeekConfig} onClose={() => setShowPeekConfig(false)} />
     </motion.div>
   );
 };
