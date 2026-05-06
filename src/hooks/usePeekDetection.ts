@@ -1,212 +1,249 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
+/**
+ * usePeekDetection — true owner-recognition peek guard.
+ *
+ * Pipeline (per detection tick, default ~600ms):
+ *   1. Grab a frame from the hidden front-camera <video>.
+ *   2. Run MediaPipe FaceLandmarker → list of faces with normalized embeddings.
+ *   3. Filter out faces below `minFaceArea` (too far / specks).
+ *   4. For each face, compute cosine similarity vs. enrolled owner embeddings
+ *      (best-of-N). A face is "stranger" if best similarity < `matchThreshold`.
+ *   5. Determine breach for *this frame*:
+ *         • alertOnStranger        — any non-owner face visible
+ *         • alertOnMultipleFaces   — total face count ≥ 2
+ *         • alertOnNoFace          — zero faces (only when "stranger guard" is OK)
+ *      The active alert modes are user-controlled in settings.
+ *   6. Push the breach bool into a rolling buffer of `consistencyFrames`.
+ *      Only when ALL frames in the buffer agree do we arm the lock timer.
+ *   7. After `lockDelay`ms of continuous breach we surface `isPeeking = true`,
+ *      which the PeekGuard component turns into a lock screen.
+ *
+ * No owner enrolled → falls back to count-based breach
+ * (multi-face = breach; single face is fine).
+ */
 
-interface PeekConfig {
-  faceThreshold: number;
-  detectionDelay: number;
-  checkInterval: number;
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  detectFaces, loadOwnerProfile, matchAgainstOwner,
+  type OwnerProfile,
+} from "@/lib/faceRecognition";
+
+export interface PeekConfig {
+  /** Cosine similarity threshold. ≥ this = owner. Default 0.7. */
+  matchThreshold?: number;
+  /** Min normalized face area (0..1). Below = ignored. Default 0.015 (~12%×12% of frame). */
+  minFaceArea?: number;
+  /** Number of consecutive frames the breach must be observed. Default 4. */
+  consistencyFrames?: number;
+  /** Sustained breach delay before locking (ms). Default 1500. */
+  lockDelay?: number;
+  /** Detection frequency in ms. Default 600. */
+  checkInterval?: number;
+  /** Trigger when a non-owner face is seen. Default true. */
+  alertOnStranger?: boolean;
+  /** Trigger when ≥ 2 faces are seen. Default true. */
+  alertOnMultipleFaces?: boolean;
+  /** Trigger when no face seen for the consistency window. Default false. */
+  alertOnNoFace?: boolean;
 }
 
-interface UsePeekDetectionReturn {
+const DEFAULTS: Required<PeekConfig> = {
+  matchThreshold: 0.7,
+  minFaceArea: 0.015,
+  consistencyFrames: 4,
+  lockDelay: 1500,
+  checkInterval: 600,
+  alertOnStranger: true,
+  alertOnMultipleFaces: true,
+  alertOnNoFace: false,
+};
+
+export interface PeekDetectionState {
   isPeeking: boolean;
   isActive: boolean;
-  start: () => Promise<void>;
-  stop: () => void;
   error: string | null;
+  /** Total faces seen in the latest frame. */
   facesDetected: number;
+  /** Strangers (non-owner) in the latest frame. */
+  strangersDetected: number;
+  /** True iff an owner profile is enrolled. */
+  ownerEnrolled: boolean;
+  /** Last reason that armed the lock. */
+  reason: "stranger" | "multiple" | "no-face" | null;
 }
 
-/**
- * Detects multiple faces using:
- * - FaceDetector API (Chrome/Android WebView) — primary
- * - Motion-variance heuristic as fallback (iOS/Safari)
- *
- * Fix #18: Removed racially-biased skin-tone fallback. Replaced with
- * frame-variance motion detection that estimates extra presence without
- * relying on skin color assumptions.
- */
 export const usePeekDetection = (
   enabled: boolean,
-  config: PeekConfig = { faceThreshold: 2, detectionDelay: 1500, checkInterval: 800 }
-): UsePeekDetectionReturn => {
-  const [isPeeking, setIsPeeking] = useState(false);
-  const [isActive, setIsActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [facesDetected, setFacesDetected] = useState(0);
+  config: PeekConfig = {},
+): PeekDetectionState => {
+  const cfg = { ...DEFAULTS, ...config };
+  const cfgRef = useRef(cfg);
+  cfgRef.current = cfg;
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<any>(null);
+  const [isPeeking, setIsPeeking]               = useState(false);
+  const [isActive, setIsActive]                 = useState(false);
+  const [error, setError]                       = useState<string | null>(null);
+  const [facesDetected, setFacesDetected]       = useState(0);
+  const [strangersDetected, setStrangersDetected] = useState(0);
+  const [ownerEnrolled, setOwnerEnrolled]       = useState(false);
+  const [reason, setReason]                     = useState<PeekDetectionState["reason"]>(null);
+
+  const videoRef    = useRef<HTMLVideoElement | null>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const peekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const configRef = useRef(config);
-  const useFallbackRef = useRef(false);
-  // For motion fallback: store previous frame data
-  const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ownerRef    = useRef<OwnerProfile | null>(null);
+  const breachBuf   = useRef<boolean[]>([]);
+  const reasonBuf   = useRef<NonNullable<PeekDetectionState["reason"]>[]>([]);
 
+  // Load owner profile once / on enable
   useEffect(() => {
-    configRef.current = config;
-  }, [config.faceThreshold, config.detectionDelay, config.checkInterval]);
+    let cancelled = false;
+    loadOwnerProfile().then((p) => {
+      if (cancelled) return;
+      ownerRef.current = p;
+      setOwnerEnrolled(!!p && p.count > 0);
+    });
+    return () => { cancelled = true; };
+  }, [enabled]);
 
-  const cleanup = useCallback(() => {
+  const teardown = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
+    if (lockTimerRef.current) { clearTimeout(lockTimerRef.current); lockTimerRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
     if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current.remove(); videoRef.current = null; }
-    if (canvasRef.current) { canvasRef.current.remove(); canvasRef.current = null; }
-    detectorRef.current = null;
-    prevFrameRef.current = null;
+    breachBuf.current = [];
+    reasonBuf.current = [];
     setIsActive(false);
   }, []);
 
-  // Fix #18: Motion-variance fallback — no skin-tone bias.
-  // Compares current frame to previous frame. High variance = extra motion/presence.
-  // Uses threshold tuned for "two people looking at screen" scenario.
-  const detectWithFallback = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return;
+  const tick = useCallback(async () => {
     const video = videoRef.current;
-    if (video.readyState < 2) return;
+    if (!video || video.readyState < 2) return;
 
-    const canvas = canvasRef.current;
-    canvas.width = 160; // small for perf
-    canvas.height = 120;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // Convert to grayscale and compute frame difference
-    const gray = new Uint8ClampedArray(canvas.width * canvas.height);
-    for (let i = 0; i < data.length; i += 4) {
-      gray[i / 4] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+    let faces;
+    try {
+      faces = await detectFaces(video);
+    } catch {
+      return;
     }
+    const c = cfgRef.current;
 
-    let estimatedFaces = 1; // assume at least the owner
-    if (prevFrameRef.current && prevFrameRef.current.length === gray.length) {
-      // Measure mean absolute diff between frames
-      let totalDiff = 0;
-      for (let i = 0; i < gray.length; i++) {
-        totalDiff += Math.abs(gray[i] - prevFrameRef.current[i]);
+    // Filter out tiny detections (noise / far-away passers-by)
+    const significant = faces.filter((f) => f.area >= c.minFaceArea);
+    setFacesDetected(significant.length);
+
+    let strangerCount = 0;
+    if (ownerRef.current) {
+      for (const f of significant) {
+        const sim = matchAgainstOwner(f.embedding, ownerRef.current);
+        if (sim < c.matchThreshold) strangerCount++;
       }
-      const avgDiff = totalDiff / gray.length;
-      // High motion in foreground hints at a second person's movement
-      // Calibrated: >12 avg pixel diff = likely extra person moving
-      if (avgDiff > 20) estimatedFaces = 3;
-      else if (avgDiff > 12) estimatedFaces = 2;
     }
-    prevFrameRef.current = gray.slice();
+    setStrangersDetected(strangerCount);
 
-    setFacesDetected(estimatedFaces);
-    const threshold = configRef.current.faceThreshold;
+    // Decide breach for THIS frame
+    let breach = false;
+    let why: NonNullable<PeekDetectionState["reason"]> | null = null;
 
-    if (estimatedFaces >= threshold) {
-      if (!peekTimeoutRef.current) {
-        peekTimeoutRef.current = setTimeout(() => setIsPeeking(true), configRef.current.detectionDelay);
+    if (c.alertOnStranger && ownerRef.current && strangerCount > 0) {
+      breach = true; why = "stranger";
+    } else if (c.alertOnMultipleFaces && significant.length >= 2) {
+      breach = true; why = "multiple";
+    } else if (c.alertOnNoFace && significant.length === 0) {
+      breach = true; why = "no-face";
+    }
+
+    // Rolling window
+    breachBuf.current.push(breach);
+    if (why) reasonBuf.current.push(why);
+    if (breachBuf.current.length > c.consistencyFrames) breachBuf.current.shift();
+    if (reasonBuf.current.length > c.consistencyFrames) reasonBuf.current.shift();
+
+    const allBreach = breachBuf.current.length === c.consistencyFrames &&
+                      breachBuf.current.every(Boolean);
+
+    if (allBreach) {
+      // Pick the most recent reason
+      const r = reasonBuf.current[reasonBuf.current.length - 1] ?? "stranger";
+      if (!lockTimerRef.current && !isPeeking) {
+        lockTimerRef.current = setTimeout(() => {
+          setReason(r);
+          setIsPeeking(true);
+        }, c.lockDelay);
       }
     } else {
-      if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
-      // Cleared peeking only after sustained absence
-      setIsPeeking(false);
-    }
-  }, []);
-
-  const detectFaces = useCallback(async () => {
-    if (useFallbackRef.current) { detectWithFallback(); return; }
-    if (!detectorRef.current || !videoRef.current) return;
-    const video = videoRef.current;
-    if (video.readyState < 2) return;
-    try {
-      const faces = await detectorRef.current.detect(video);
-      const count = faces.length;
-      setFacesDetected(count);
-      const threshold = configRef.current.faceThreshold;
-      if (count >= threshold) {
-        if (!peekTimeoutRef.current) {
-          peekTimeoutRef.current = setTimeout(() => setIsPeeking(true), configRef.current.detectionDelay);
-        }
-      } else {
-        if (peekTimeoutRef.current) { clearTimeout(peekTimeoutRef.current); peekTimeoutRef.current = null; }
-        setIsPeeking(false);
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+        lockTimerRef.current = null;
       }
-    } catch { /* FaceDetector can fail on some frames */ }
-  }, [detectWithFallback]);
+      // Auto-clear once breach has been gone for the full window.
+      // The lock screen itself controls when isPeeking goes back to false.
+    }
+  }, [isPeeking]);
 
   const start = useCallback(async () => {
     if (isActive) return;
     setError(null);
-    const hasFaceDetector = "FaceDetector" in window;
-    useFallbackRef.current = !hasFaceDetector;
-
     try {
       const video = document.createElement("video");
       video.setAttribute("playsinline", "");
       video.setAttribute("autoplay", "");
-      video.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
+      video.muted = true;
+      video.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
       document.body.appendChild(video);
       videoRef.current = video;
 
-      const canvas = document.createElement("canvas");
-      canvas.style.display = "none";
-      document.body.appendChild(canvas);
-      canvasRef.current = canvas;
-
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 5, max: 10 } },
+        video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 8, max: 15 } },
         audio: false,
       });
       streamRef.current = stream;
       video.srcObject = stream;
       await video.play();
 
-      if (hasFaceDetector) {
-        // @ts-ignore
-        detectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
-      }
+      // Warm up the model so first detection isn't 1s slow
+      try { await (await import("@/lib/faceRecognition")).getLandmarker(); } catch { /* network */ }
 
-      intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
+      intervalRef.current = setInterval(tick, cfgRef.current.checkInterval);
       setIsActive(true);
-    } catch (err: unknown) {
-      setError((err instanceof Error ? err.message : String(err)) || "Could not start peek detection");
-      cleanup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start camera");
+      teardown();
     }
-  }, [isActive, detectFaces, cleanup]);
+  }, [isActive, tick, teardown]);
 
-  const stop = useCallback(() => {
-    cleanup();
-    setIsPeeking(false);
-    setFacesDetected(0);
-    setError(null);
-  }, [cleanup]);
-
+  // enable/disable lifecycle
   useEffect(() => {
     if (enabled) start();
-    else stop();
-    return () => cleanup();
+    else teardown();
+    return () => teardown();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
+  // Re-arm interval if checkInterval changes
   useEffect(() => {
-    if (!isActive || !enabled) return;
+    if (!isActive) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(detectFaces, config.checkInterval);
+    intervalRef.current = setInterval(tick, cfg.checkInterval);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [config.checkInterval, isActive, enabled, detectFaces]);
+  }, [cfg.checkInterval, isActive, tick]);
 
+  // Pause work when tab hidden
   useEffect(() => {
     if (!enabled) return;
-    const handleVisibility = () => {
+    const onVis = () => {
       if (document.hidden) {
         if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
       } else if (isActive && !intervalRef.current) {
-        intervalRef.current = setInterval(detectFaces, configRef.current.checkInterval);
+        intervalRef.current = setInterval(tick, cfgRef.current.checkInterval);
       }
     };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [enabled, isActive, detectFaces]);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [enabled, isActive, tick]);
 
-  return { isPeeking, isActive, start, stop, error, facesDetected };
+  return {
+    isPeeking, isActive, error,
+    facesDetected, strangersDetected, ownerEnrolled, reason,
+  };
 };

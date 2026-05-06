@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { hashPin } from "@/lib/crypto";
 import BackupManager from "@/components/BackupManager";
 import ThemeStudio from "@/components/ThemeStudio";
+import PeekConfigDialog from "@/components/PeekConfigDialog";
 
 const presetWallpapers = [
   { id:"w1", style:"linear-gradient(135deg, hsl(28,15%,90%) 0%, hsl(28,20%,82%) 100%)" },
@@ -309,6 +310,7 @@ const Settings = () => {
     { key:"notifications" as const, icon:Bell,        label:"Notifications",  desc:"Message & call alerts" },
     { key:"hapticFeedback" as const, icon:Vibrate,    label:"Haptics",        desc:"Vibrate on interactions" },
     { key:"privacyMode" as const, icon:EyeOff,        label:"Privacy",        desc:"Blur in task switcher" },
+    { key:"peekGuard" as const, icon:Scan,            label:"Peek Guard",     desc:"Lock when stranger looks at screen" },
     { key:"moodDetection" as const, icon:Smile,       label:"Daily Mood",     desc:"Camera checks your mood once a day" },
   ];
 
@@ -542,6 +544,14 @@ const Settings = () => {
               <button onClick={() => { setPinInput(""); setPinStep("enter"); setPinFirst(""); setShowPinDialog(true); }}
                 className="h-7 px-3 rounded-full bg-muted text-[11px] text-foreground">Change</button>
             </div>
+            {appSettings.peekGuard && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Scan className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0"><p className="text-sm font-medium">Peek Guard setup</p><p className="text-[11px] text-muted-foreground">Enroll face, sensitivity & triggers</p></div>
+                <button onClick={() => { hapticLight(); setShowPeekConfig(true); }}
+                  className="h-7 px-3 rounded-full bg-muted text-[11px] text-foreground">Configure</button>
+              </div>
+            )}
           </div>
         </section>
 
@@ -841,6 +851,7 @@ const Settings = () => {
       </Dialog>
 
       <ThemeStudio open={showThemeStudio} onOpenChange={setShowThemeStudio} />
+      <PeekConfigDialog open={showPeekConfig} onClose={() => setShowPeekConfig(false)} />
     </motion.div>
   );
 };
