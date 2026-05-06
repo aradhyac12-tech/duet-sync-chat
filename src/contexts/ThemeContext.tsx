@@ -25,9 +25,18 @@ interface AppSettings {
   hapticFeedback: boolean;
   privacyMode: boolean;
   peekGuard: boolean;
+  // Legacy (kept for backwards compat with PeekGuard component reads)
   peekFaceThreshold: number;
   peekDetectionDelay: number;
   peekCheckInterval: number;
+  // New owner-recognition pipeline knobs
+  peekMatchThreshold: number;        // 0..1 cosine similarity (default 0.7)
+  peekConsistencyFrames: number;     // 1..10 (default 4)
+  peekLockDelay: number;             // ms (default 1500)
+  peekMinFaceArea: number;           // 0..0.2 normalized area (default 0.015)
+  peekAlertOnStranger: boolean;      // default true
+  peekAlertOnMultipleFaces: boolean; // default true
+  peekAlertOnNoFace: boolean;        // default false
   anniversaryDate: string | null;
   moodDetection: boolean; // Fix #Bug11: explicit opt-in, defaults off
 }
@@ -55,9 +64,16 @@ const defaultSettings: AppSettings = {
   peekGuard: false,
   peekFaceThreshold: 2,
   peekDetectionDelay: 1500,
-  peekCheckInterval: 800,
+  peekCheckInterval: 600,
+  peekMatchThreshold: 0.7,
+  peekConsistencyFrames: 4,
+  peekLockDelay: 1500,
+  peekMinFaceArea: 0.015,
+  peekAlertOnStranger: true,
+  peekAlertOnMultipleFaces: true,
+  peekAlertOnNoFace: false,
   anniversaryDate: null,
-  moodDetection: false, // Fix #Bug11: off by default — user must explicitly enable
+  moodDetection: false,
 };
 
 const ThemeContext = createContext<ThemeContextType>({
