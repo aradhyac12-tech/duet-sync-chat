@@ -27,6 +27,7 @@ const PRIMARY: Tab[] = [
 
 const SECONDARY: Tab[] = [
   { path: "/map", icon: MapPin, label: "Map" },
+  { path: "/groic", icon: Music, label: "Groic" },
   { path: "/playlist", icon: Music, label: "Music" },
   { path: "/settings", icon: Settings, label: "Settings" },
 ];
